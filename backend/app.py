@@ -127,6 +127,34 @@ def init_db():
         )
     ''')
     
+    # Book reservations table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS book_reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER,
+            user_id INTEGER,
+            status TEXT DEFAULT 'pending',
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            approved_at TIMESTAMP,
+            approved_by INTEGER,
+            rejection_reason TEXT,
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (approved_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # Add rejection_reason and viewed columns if they don't exist
+    try:
+        cursor.execute('ALTER TABLE book_reservations ADD COLUMN rejection_reason TEXT')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE book_reservations ADD COLUMN viewed BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
+    
     # Insert admin user
     admin_password = hashlib.sha256('admin'.encode()).hexdigest()
     user_password = hashlib.sha256('user'.encode()).hexdigest()
@@ -439,43 +467,40 @@ def add_book():
     return jsonify({'message': 'Book added successfully'})
 
 @app.route('/api/books/<int:book_id>/reserve', methods=['POST'])
-def reserve_book():
+def reserve_book(book_id):
     try:
         data = request.json
-        book_id = request.view_args['book_id']
         user_id = data.get('user_id', 1)
         
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         
-        # Check availability
-        cursor.execute('SELECT available_copies, title FROM books WHERE id = ?', (book_id,))
+        # Check if book exists
+        cursor.execute('SELECT title FROM books WHERE id = ?', (book_id,))
         book = cursor.fetchone()
         
         if not book:
             conn.close()
             return jsonify({'error': 'Book not found'}), 404
-            
-        if book[0] <= 0:
+        
+        # Check if user already has pending request for this book
+        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status = "pending"', (book_id, user_id))
+        existing = cursor.fetchone()
+        
+        if existing:
             conn.close()
-            return jsonify({'error': 'Book not available'}), 400
+            return jsonify({'error': 'You already have a pending request for this book'}), 400
         
-        # Create reservation/issue
-        issue_date = datetime.now().date()
-        due_date = issue_date + timedelta(days=14)
-        
+        # Create reservation request
         cursor.execute('''
-            INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status)
-            VALUES (?, ?, ?, ?, 'issued')
-        ''', (book_id, user_id, issue_date, due_date))
-        
-        # Update available copies
-        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+            INSERT INTO book_reservations (book_id, user_id, status)
+            VALUES (?, ?, 'pending')
+        ''', (book_id, user_id))
         
         conn.commit()
         conn.close()
         
-        return jsonify({'message': 'Book reserved successfully'})
+        return jsonify({'message': 'Reservation request sent to admin for approval'})
     except Exception as e:
         print(f'Reserve error: {e}')
         return jsonify({'error': str(e)}), 500
@@ -973,9 +998,186 @@ def get_user_reservations(user_id):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
-    # For now, return empty as we don't have a separate reservations table
+    cursor.execute('''
+        SELECT br.id, br.status, br.rejection_reason, b.title, b.author
+        FROM book_reservations br
+        JOIN books b ON br.book_id = b.id
+        WHERE br.user_id = ?
+        ORDER BY br.requested_at DESC
+    ''', (user_id,))
+    reservations = cursor.fetchall()
+    
+    reservation_list = []
+    for res in reservations:
+        reservation_list.append({
+            'id': res[0],
+            'status': res[1],
+            'rejection_reason': res[2],
+            'book_title': res[3],
+            'book_author': res[4]
+        })
+    
     conn.close()
-    return jsonify([])
+    return jsonify(reservation_list)
+
+@app.route('/api/user-reservations/<int:user_id>', methods=['GET'])
+def get_user_reservation_status(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT status FROM book_reservations
+            WHERE user_id = ? AND status IN ('approved', 'rejected') AND COALESCE(viewed, 0) = 0
+        ''', (user_id,))
+    except sqlite3.OperationalError:
+        # Fallback if viewed column doesn't exist
+        cursor.execute('''
+            SELECT status FROM book_reservations
+            WHERE user_id = ? AND status IN ('approved', 'rejected')
+        ''', (user_id,))
+    
+    reservations = cursor.fetchall()
+    status_list = [{'status': res[0]} for res in reservations]
+    
+    conn.close()
+    return jsonify(status_list)
+
+@app.route('/api/admin/reservation-requests', methods=['GET'])
+def get_reservation_requests():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT br.id, b.title, b.author, u.username, u.email, br.requested_at, b.available_copies, br.book_id, br.user_id
+        FROM book_reservations br
+        JOIN books b ON br.book_id = b.id
+        JOIN users u ON br.user_id = u.id
+        WHERE br.status = 'pending'
+        ORDER BY br.requested_at ASC
+    ''')
+    requests = cursor.fetchall()
+    
+    request_list = []
+    for req in requests:
+        request_list.append({
+            'id': req[0],
+            'book_title': req[1],
+            'book_author': req[2],
+            'user_name': req[3],
+            'user_email': req[4],
+            'requested_at': req[5],
+            'available_copies': req[6],
+            'book_id': req[7],
+            'user_id': req[8]
+        })
+    
+    conn.close()
+    return jsonify(request_list)
+
+@app.route('/api/admin/reservation-requests/<int:request_id>/approve', methods=['POST'])
+def approve_reservation(request_id):
+    data = request.json
+    admin_id = data.get('admin_id', 1)
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Get reservation details
+        cursor.execute('SELECT book_id, user_id FROM book_reservations WHERE id = ? AND status = "pending"', (request_id,))
+        reservation = cursor.fetchone()
+        
+        if not reservation:
+            return jsonify({'error': 'Reservation not found or already processed'}), 404
+        
+        book_id, user_id = reservation
+        
+        # Check availability
+        cursor.execute('SELECT available_copies FROM books WHERE id = ?', (book_id,))
+        book = cursor.fetchone()
+        
+        if not book or book[0] <= 0:
+            return jsonify({'error': 'Book not available'}), 400
+        
+        # Issue the book
+        issue_date = datetime.now().date()
+        due_date = issue_date + timedelta(days=14)
+        
+        cursor.execute('''
+            INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status, overdue_fee_per_day)
+            VALUES (?, ?, ?, ?, 'issued', 5.00)
+        ''', (book_id, user_id, issue_date, due_date))
+        
+        # Update available copies
+        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+        
+        # Update reservation status
+        cursor.execute('''
+            UPDATE book_reservations 
+            SET status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = ?, viewed = 0
+            WHERE id = ?
+        ''', (admin_id, request_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Reservation approved and book issued'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/admin/reservation-requests/<int:request_id>/reject', methods=['POST'])
+def reject_reservation(request_id):
+    data = request.json
+    reason = data.get('reason', 'No reason provided')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, viewed = 0 WHERE id = ?', (reason, request_id))
+        conn.commit()
+        return jsonify({'message': 'Reservation rejected'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/admin/reservation-requests/count', methods=['GET'])
+def get_reservation_count():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM book_reservations WHERE status = "pending"')
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return jsonify({'count': count})
+
+@app.route('/api/user-reservations/<int:user_id>/mark-viewed', methods=['POST'])
+def mark_reservations_viewed(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            UPDATE book_reservations 
+            SET viewed = 1 
+            WHERE user_id = ? AND status IN ('approved', 'rejected')
+        ''', (user_id,))
+        conn.commit()
+    except sqlite3.OperationalError:
+        # If viewed column doesn't exist, delete the reservations instead
+        cursor.execute('''
+            DELETE FROM book_reservations 
+            WHERE user_id = ? AND status IN ('approved', 'rejected')
+        ''', (user_id,))
+        conn.commit()
+    
+    conn.close()
+    return jsonify({'message': 'Reservations marked as viewed'})
 
 # Initialize database on import
 init_db()

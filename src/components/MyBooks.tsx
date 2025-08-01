@@ -12,11 +12,13 @@ interface MyBooksProps {
 
 export const MyBooks = ({ user }: MyBooksProps) => {
   const [myBooks, setMyBooks] = useState([]);
+  const [reservationStatus, setReservationStatus] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showChatbot, setShowChatbot] = useState(false);
 
   useEffect(() => {
     fetchMyBooks();
+    fetchReservationStatus();
   }, []);
 
   const fetchMyBooks = async () => {
@@ -28,6 +30,18 @@ export const MyBooks = ({ user }: MyBooksProps) => {
       }
     } catch (error) {
       console.error('Error fetching my books:', error);
+    }
+  };
+
+  const fetchReservationStatus = async () => {
+    try {
+      const response = await fetch(`http://localhost:5001/api/user/${user.id}/reservations`);
+      if (response.ok) {
+        const data = await response.json();
+        setReservationStatus(data);
+      }
+    } catch (error) {
+      console.error('Error fetching reservation status:', error);
     }
   };
 
@@ -45,6 +59,7 @@ export const MyBooks = ({ user }: MyBooksProps) => {
       if (response.ok) {
         alert('Book marked as read!');
         fetchMyBooks();
+        fetchReservationStatus();
       }
     } catch (error) {
       console.error('Mark read error:', error);
@@ -62,6 +77,35 @@ export const MyBooks = ({ user }: MyBooksProps) => {
         <h2 className="text-3xl font-bold text-foreground mb-2">My Books</h2>
         <p className="text-muted-foreground">Books you have checked out - Progress powered by AI</p>
       </div>
+
+      {/* Reservation Status */}
+      {reservationStatus.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Reservation Status</CardTitle>
+            <CardDescription>Updates on your book reservation requests</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {reservationStatus.map((status) => (
+                <div key={status.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                  <div className={`w-3 h-3 rounded-full ${
+                    status.status === 'approved' ? 'bg-green-500' : 'bg-red-500'
+                  }`}></div>
+                  <div className="flex-1">
+                    <p className="font-medium">{status.book_title} by {status.book_author}</p>
+                    <p className={`text-sm ${
+                      status.status === 'approved' ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {status.status === 'approved' ? 'Approved - Book issued to you!' : `Rejected${status.rejection_reason ? ': ' + status.rejection_reason : ''}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       <Card>
         <CardHeader>

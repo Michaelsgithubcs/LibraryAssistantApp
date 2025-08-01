@@ -43,6 +43,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [issuingBook, setIssuingBook] = useState<Book | null>(null);
   const [selectedUser, setSelectedUser] = useState("");
+  const [userSearchTerm, setUserSearchTerm] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [overdueFee, setOverdueFee] = useState("");
 
@@ -96,6 +97,11 @@ export const BookSearch = ({ user }: BookSearchProps) => {
     book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     book.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
     book.isbn.includes(searchTerm)
+  );
+
+  const filteredUsers = users.filter(user =>
+    user.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
   );
 
   const handleEditBook = async () => {
@@ -188,10 +194,12 @@ export const BookSearch = ({ user }: BookSearchProps) => {
       });
       
       if (response.ok) {
-        alert('Book reserved successfully!');
+        const result = await response.json();
+        alert(result.message || 'Reservation request sent!');
         fetchBooks();
       } else {
-        alert('Failed to reserve book');
+        const error = await response.json();
+        alert(error.error || 'Failed to reserve book');
       }
     } catch (error) {
       console.error('Reserve error:', error);
@@ -370,13 +378,19 @@ export const BookSearch = ({ user }: BookSearchProps) => {
                           </DialogHeader>
                           <div className="space-y-4">
                             <div>
-                              <Label>Select User</Label>
+                              <Label>Search and Select User</Label>
+                              <Input
+                                placeholder="Search by username or email..."
+                                value={userSearchTerm}
+                                onChange={(e) => setUserSearchTerm(e.target.value)}
+                                className="mb-2"
+                              />
                               <Select value={selectedUser} onValueChange={setSelectedUser}>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Choose a user" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {users.map((u) => (
+                                  {filteredUsers.map((u) => (
                                     <SelectItem key={u.id} value={u.id.toString()}>
                                       {u.username} ({u.email})
                                     </SelectItem>

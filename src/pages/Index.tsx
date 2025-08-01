@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { BookSearch } from "@/components/BookSearch";
 import { EnhancedMemberManagement } from "@/components/EnhancedMemberManagement";
 import { IssueReturn } from "@/components/IssueReturn";
@@ -10,6 +10,7 @@ import { Login } from "@/components/Login";
 import { AdminBookUpload } from "@/components/AdminBookUpload";
 import { EbookStore } from "@/components/EbookStore";
 import { MyBooks } from "@/components/MyBooks";
+import { BookRequests } from "@/components/BookRequests";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BookOpen, Users, CreditCard, MessageSquare, Settings, User, LogOut, ShoppingCart } from "lucide-react";
@@ -26,6 +27,65 @@ const Index = () => {
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
   });
+  const [requestCount, setRequestCount] = useState(0);
+  const [userReservationStatus, setUserReservationStatus] = useState({ hasApproved: false, hasRejected: false });
+
+  // Fetch request count for admin
+  const fetchRequestCount = async () => {
+    if (currentUser?.role === 'admin') {
+      try {
+        const response = await fetch('http://localhost:5001/api/admin/reservation-requests/count');
+        if (response.ok) {
+          const data = await response.json();
+          setRequestCount(data.count);
+        }
+      } catch (error) {
+        console.error('Error fetching request count:', error);
+      }
+    }
+  };
+
+  // Fetch user reservation status
+  const fetchUserReservationStatus = async () => {
+    if (currentUser?.role === 'user') {
+      try {
+        const response = await fetch(`http://localhost:5001/api/user-reservations/${currentUser.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const hasApproved = data.some((req: any) => req.status === 'approved');
+          const hasRejected = data.some((req: any) => req.status === 'rejected');
+          setUserReservationStatus({ hasApproved, hasRejected });
+        }
+      } catch (error) {
+        console.error('Error fetching user reservations:', error);
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    fetchRequestCount();
+    fetchUserReservationStatus();
+    const interval = setInterval(() => {
+      fetchRequestCount();
+      fetchUserReservationStatus();
+    }, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // Refresh count when navigating to/from requests page
+  React.useEffect(() => {
+    if (currentView === 'requests') {
+      fetchRequestCount();
+    }
+    if (currentView === 'mybooks' && currentUser?.role === 'user') {
+      // Mark reservations as viewed
+      fetch(`http://localhost:5001/api/user-reservations/${currentUser.id}/mark-viewed`, {
+        method: 'POST'
+      }).then(() => {
+        setUserReservationStatus({ hasApproved: false, hasRejected: false });
+      });
+    }
+  }, [currentView]);
 
   const handleLogin = (user: CurrentUser) => {
     setCurrentUser(user);
@@ -49,6 +109,8 @@ const Index = () => {
         return currentUser.role === "user" ? <MyBooks user={currentUser} /> : null;
       case "ebooks":
         return currentUser.role === "user" ? <EbookStore user={currentUser} /> : null;
+      case "requests":
+        return currentUser.role === "admin" ? <BookRequests user={currentUser} /> : null;
       case "upload":
         return currentUser.role === "admin" ? <AdminBookUpload /> : null;
       case "members":
@@ -58,7 +120,7 @@ const Index = () => {
       case "fines":
         return <FinesManagement user={currentUser} />;
       case "chatbot":
-        return <LibraryChatbot />;
+        return <LibraryChatbot user={currentUser} />;
       case "admin":
         return <AdminDashboard onNavigate={setCurrentView} user={currentUser} />;
       default:
@@ -121,6 +183,19 @@ const Index = () => {
               <BookOpen className="h-4 w-4 mr-2" />
               Book Search
             </Button>
+            {currentUser.role === "admin" && (
+              <Button
+                variant={currentView === "requests" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => setCurrentView("requests")}
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Book Requests
+                {requestCount > 0 && (
+                  <div className="w-2 h-2 bg-green-500 rounded-full ml-2"></div>
+                )}
+              </Button>
+            )}
             {currentUser.role === "user" && (
               <Button
                 variant={currentView === "mybooks" ? "default" : "ghost"}
@@ -129,6 +204,12 @@ const Index = () => {
               >
                 <BookOpen className="h-4 w-4 mr-2" />
                 My Books
+                {userReservationStatus.hasApproved && (
+                  <div className="w-2 h-2 bg-green-500 rounded-full ml-2"></div>
+                )}
+                {userReservationStatus.hasRejected && (
+                  <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
+                )}
               </Button>
             )}
 

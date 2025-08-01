@@ -15,6 +15,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
     overdueBooks: 0,
     totalFines: 0,
     newMembers: 0,
+    bookRequests: 0,
   });
   const [recentBooks, setRecentBooks] = useState([]);
 
@@ -37,6 +38,9 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       const finesResponse = await fetch('http://localhost:5001/api/admin/fines-count');
       const finesData = finesResponse.ok ? await finesResponse.json() : { amount: 0 };
       
+      const requestsResponse = await fetch('http://localhost:5001/api/admin/reservation-requests/count');
+      const requestsData = requestsResponse.ok ? await requestsResponse.json() : { count: 0 };
+      
       const activeMembers = members.filter(m => m.status === 'active').length;
       
       setStats({
@@ -45,7 +49,8 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
         activeMembers: activeMembers,
         overdueBooks: overdueData.count,
         totalFines: finesData.amount,
-        newMembers: 8
+        newMembers: 8,
+        bookRequests: requestsData.count
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -79,7 +84,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       <div className="space-y-6">
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="cursor-pointer hover:bg-muted/50" onClick={() => onNavigate?.('books')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Books</CardTitle>
@@ -102,6 +107,19 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
             <div className="text-2xl font-bold">{stats.activeMembers}</div>
             <p className="text-xs text-muted-foreground">
               +{stats.newMembers} new this month
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-muted/50" onClick={() => onNavigate?.('requests')}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Book Requests</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.bookRequests}</div>
+            <p className="text-xs text-muted-foreground">
+              Pending reservation requests
             </p>
           </CardContent>
         </Card>
