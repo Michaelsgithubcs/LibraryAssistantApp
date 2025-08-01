@@ -1,0 +1,984 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import sqlite3
+import os
+from datetime import datetime, timedelta
+import hashlib
+import secrets
+
+app = Flask(__name__)
+CORS(app)
+app.secret_key = secrets.token_hex(16)
+
+DATABASE = 'library.db'
+
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'user',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Books table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            author TEXT NOT NULL,
+            isbn TEXT UNIQUE,
+            category TEXT NOT NULL,
+            description TEXT,
+            price DECIMAL(10,2) DEFAULT 0,
+            is_free BOOLEAN DEFAULT 1,
+            is_ebook BOOLEAN DEFAULT 0,
+            cover_image TEXT,
+            pdf_url TEXT,
+            total_copies INTEGER DEFAULT 1,
+            available_copies INTEGER DEFAULT 1,
+            reading_time_minutes INTEGER DEFAULT 0,
+            publish_date DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Add publish_date column if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE books ADD COLUMN publish_date DATE')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Book ratings table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS book_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER,
+            user_id INTEGER,
+            rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+            review TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(book_id, user_id)
+        )
+    ''')
+    
+    # Book issues table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS book_issues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER,
+            user_id INTEGER,
+            issue_date DATE NOT NULL,
+            due_date DATE NOT NULL,
+            return_date DATE,
+            status TEXT DEFAULT 'issued',
+            fine_amount DECIMAL(10,2) DEFAULT 0,
+            overdue_fee_per_day DECIMAL(10,2) DEFAULT 5.00,
+            damage_description TEXT,
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Add new columns if they don't exist
+    try:
+        cursor.execute('ALTER TABLE book_issues ADD COLUMN overdue_fee_per_day DECIMAL(10,2) DEFAULT 5.00')
+        cursor.execute('ALTER TABLE book_issues ADD COLUMN damage_description TEXT')
+    except sqlite3.OperationalError:
+        pass
+    
+    # Reading progress table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reading_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER,
+            user_id INTEGER,
+            progress_percentage INTEGER DEFAULT 0,
+            is_completed BOOLEAN DEFAULT 0,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(book_id, user_id)
+        )
+    ''')
+    
+    # Purchases table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            book_id INTEGER,
+            amount DECIMAL(10,2) NOT NULL,
+            currency TEXT DEFAULT 'ZAR',
+            status TEXT DEFAULT 'completed',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (book_id) REFERENCES books (id)
+        )
+    ''')
+    
+    # Insert admin user
+    admin_password = hashlib.sha256('admin'.encode()).hexdigest()
+    user_password = hashlib.sha256('user'.encode()).hexdigest()
+    librarian_password = hashlib.sha256('librarian'.encode()).hexdigest()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO users (username, email, password, role)
+        VALUES 
+        ('admin', 'admin@library.com', ?, 'admin'),
+        ('user', 'user@library.com', ?, 'user'),
+        ('librarian', 'librarian@library.com', ?, 'admin')
+    ''', (admin_password, user_password, librarian_password))
+    
+
+    
+    conn.commit()
+    conn.close()
+
+# API Routes
+@app.route('/api/books', methods=['GET'])
+def get_books():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    category = request.args.get('category')
+    is_ebook = request.args.get('is_ebook')
+    
+    query = '''
+        SELECT b.*, 
+               COALESCE(AVG(br.rating), 0) as avg_rating,
+               COUNT(br.rating) as rating_count
+        FROM books b
+        LEFT JOIN book_ratings br ON b.id = br.book_id
+        WHERE b.is_ebook = 0
+    '''
+    params = []
+    
+    if category:
+        query += ' AND b.category = ?'
+        params.append(category)
+    
+    if is_ebook:
+        query += ' AND b.is_ebook = ?'
+        params.append(1 if is_ebook == 'true' else 0)
+    
+    query += ' GROUP BY b.id ORDER BY b.title ASC'
+    
+    cursor.execute(query, params)
+    books = cursor.fetchall()
+    
+    book_list = []
+    for book in books:
+        book_list.append({
+            'id': book[0],
+            'title': book[1],
+            'author': book[2],
+            'isbn': book[3],
+            'category': book[4],
+            'description': book[5],
+            'price': float(book[6]) if book[6] else 0,
+            'is_free': bool(book[7]),
+            'is_ebook': bool(book[8]),
+            'cover_image': book[9],
+            'pdf_url': book[10],
+            'total_copies': book[11],
+            'available_copies': book[12],
+            'reading_time_minutes': book[13],
+            'publish_date': book[14],
+            'avg_rating': round(float(book[16]), 1) if len(book) > 16 else 0,
+            'rating_count': book[17] if len(book) > 17 else 0
+        })
+    
+    conn.close()
+    return jsonify(book_list)
+
+@app.route('/api/books/<int:book_id>/rate', methods=['POST'])
+def rate_book():
+    data = request.json
+    book_id = request.view_args['book_id']
+    user_id = data.get('user_id', 1)  # Default user for demo
+    rating = data.get('rating')
+    review = data.get('review', '')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO book_ratings (book_id, user_id, rating, review)
+        VALUES (?, ?, ?, ?)
+    ''', (book_id, user_id, rating, review))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Rating submitted successfully'})
+
+@app.route('/api/books/<int:book_id>/purchase', methods=['POST'])
+def purchase_book():
+    data = request.json
+    book_id = request.view_args['book_id']
+    user_id = data.get('user_id', 1)
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Get book price
+    cursor.execute('SELECT price FROM books WHERE id = ?', (book_id,))
+    book = cursor.fetchone()
+    
+    if not book:
+        return jsonify({'error': 'Book not found'}), 404
+    
+    # Record purchase
+    cursor.execute('''
+        INSERT INTO purchases (user_id, book_id, amount)
+        VALUES (?, ?, ?)
+    ''', (user_id, book_id, book[0]))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Purchase successful'})
+
+@app.route('/api/reading-progress', methods=['POST'])
+def update_reading_progress():
+    data = request.json
+    book_id = data.get('book_id')
+    user_id = data.get('user_id', 1)
+    progress = data.get('progress_percentage', 0)
+    is_completed = progress >= 100
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR REPLACE INTO reading_progress 
+        (book_id, user_id, progress_percentage, is_completed, completed_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (book_id, user_id, progress, is_completed, 
+          datetime.now() if is_completed else None))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Progress updated'})
+
+@app.route('/api/fines/<int:fine_id>/pay', methods=['POST'])
+def pay_fine():
+    fine_id = request.view_args['fine_id']
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE book_issues 
+        SET fine_amount = 0, status = 'fine_paid'
+        WHERE id = ?
+    ''', (fine_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Fine paid successfully'})
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT DISTINCT category FROM books ORDER BY category')
+    categories = [row[0] for row in cursor.fetchall()]
+    
+    conn.close()
+    return jsonify(categories)
+
+# Authentication routes
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    cursor.execute('SELECT id, username, role, status FROM users WHERE email = ? AND password = ?', 
+                   (username, hashed_password))
+    user = cursor.fetchone()
+    
+    conn.close()
+    
+    if user:
+        if len(user) > 3 and user[3] == 'suspended':
+            return jsonify({'error': 'Account suspended'}), 403
+        return jsonify({
+            'id': user[0],
+            'username': user[1],
+            'role': user[2]
+        })
+    else:
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/api/auth/signup', methods=['POST'])
+def signup():
+    data = request.json
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not all([username, email, password]):
+        return jsonify({'error': 'All fields required'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Check if user exists
+    cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'User already exists'}), 400
+    
+    # Create user
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    cursor.execute('INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+                   (username, email, hashed_password, 'user'))
+    user_id = cursor.lastrowid
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'id': user_id,
+        'username': username,
+        'role': 'user'
+    })
+
+@app.route('/api/members', methods=['GET'])
+def get_members():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM users WHERE role = "user"')
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return jsonify([{'id': i} for i in range(count)])
+
+@app.route('/api/overdue-books', methods=['GET'])
+def get_overdue_books():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) FROM book_issues 
+        WHERE status = 'issued' AND due_date < date('now')
+    ''')
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return jsonify([{'id': i} for i in range(count)])
+
+@app.route('/api/admin/overdue-count', methods=['GET'])
+def get_overdue_count():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT COUNT(*) FROM book_issues 
+        WHERE status = 'issued' AND due_date < date('now')
+    ''')
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return jsonify({'count': count})
+
+# Admin routes
+@app.route('/api/admin/books', methods=['POST'])
+def add_book():
+    data = request.json
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Auto-generate ISBN
+    import random
+    isbn = f"978-{random.randint(1000000000, 9999999999)}"
+    
+    cursor.execute('''
+        INSERT INTO books (title, author, isbn, category, description, price, is_free, is_ebook, reading_time_minutes, total_copies, available_copies, publish_date)
+        VALUES (?, ?, ?, ?, ?, 0, 1, 0, ?, ?, ?, ?)
+    ''', (
+        data.get('title'),
+        data.get('author'),
+        isbn,
+        data.get('category'),
+        data.get('description', ''),
+        data.get('reading_time_minutes', 0),
+        data.get('total_copies', 1),
+        data.get('available_copies', 1),
+        data.get('publish_date')
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Book added successfully'})
+
+@app.route('/api/books/<int:book_id>/reserve', methods=['POST'])
+def reserve_book():
+    try:
+        data = request.json
+        book_id = request.view_args['book_id']
+        user_id = data.get('user_id', 1)
+        
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Check availability
+        cursor.execute('SELECT available_copies, title FROM books WHERE id = ?', (book_id,))
+        book = cursor.fetchone()
+        
+        if not book:
+            conn.close()
+            return jsonify({'error': 'Book not found'}), 404
+            
+        if book[0] <= 0:
+            conn.close()
+            return jsonify({'error': 'Book not available'}), 400
+        
+        # Create reservation/issue
+        issue_date = datetime.now().date()
+        due_date = issue_date + timedelta(days=14)
+        
+        cursor.execute('''
+            INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status)
+            VALUES (?, ?, ?, ?, 'issued')
+        ''', (book_id, user_id, issue_date, due_date))
+        
+        # Update available copies
+        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'Book reserved successfully'})
+    except Exception as e:
+        print(f'Reserve error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/books/<int:book_id>', methods=['PUT'])
+def edit_book(book_id):
+    data = request.json
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE books SET title = ?, author = ?, category = ?, description = ?, 
+                        total_copies = ?, available_copies = ?, publish_date = ?
+        WHERE id = ?
+    ''', (
+        data.get('title'),
+        data.get('author'),
+        data.get('category'),
+        data.get('description'),
+        data.get('total_copies'),
+        data.get('available_copies'),
+        data.get('publish_date'),
+        book_id
+    ))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Book updated successfully'})
+
+@app.route('/api/admin/books/<int:book_id>', methods=['DELETE'])
+def delete_book(book_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM books WHERE id = ?', (book_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Book deleted successfully'})
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id, username, email, role FROM users WHERE role = "user"')
+    users = cursor.fetchall()
+    
+    user_list = []
+    for user in users:
+        user_list.append({
+            'id': user[0],
+            'username': user[1],
+            'email': user[2],
+            'role': user[3]
+        })
+    
+    conn.close()
+    return jsonify(user_list)
+
+@app.route('/api/admin/members', methods=['GET'])
+def get_all_members():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Add status and suspension_end columns if they don't exist
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "active"')
+        cursor.execute('ALTER TABLE users ADD COLUMN suspension_end DATE')
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Columns already exist
+    
+    cursor.execute('''
+        SELECT u.id, u.username, u.email, u.role, u.created_at,
+               COALESCE(u.status, 'active') as status,
+               COALESCE(u.suspension_end, '') as suspension_end,
+               COUNT(bi.id) as books_issued
+        FROM users u
+        LEFT JOIN book_issues bi ON u.id = bi.user_id AND bi.status = 'issued'
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+    ''')
+    members = cursor.fetchall()
+    
+    member_list = []
+    for member in members:
+        member_list.append({
+            'id': member[0],
+            'username': member[1],
+            'email': member[2],
+            'role': member[3],
+            'created_at': member[4],
+            'status': member[5],
+            'suspension_end': member[6],
+            'books_issued': member[7]
+        })
+    
+    conn.close()
+    return jsonify(member_list)
+
+@app.route('/api/admin/members/<int:member_id>', methods=['PUT'])
+def edit_member(member_id):
+    data = request.json
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Update member details
+    if 'password' in data and data['password']:
+        hashed_password = hashlib.sha256(data['password'].encode()).hexdigest()
+        cursor.execute('''
+            UPDATE users SET username = ?, email = ?, role = ?, password = ?
+            WHERE id = ?
+        ''', (data['username'], data['email'], data['role'], hashed_password, member_id))
+    else:
+        cursor.execute('''
+            UPDATE users SET username = ?, email = ?, role = ?
+            WHERE id = ?
+        ''', (data['username'], data['email'], data['role'], member_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Member updated successfully'})
+
+@app.route('/api/admin/members/<int:member_id>/suspend', methods=['POST'])
+def suspend_member(member_id):
+    data = request.json
+    duration = data.get('duration', '1_month')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Calculate suspension end date
+    from datetime import datetime, timedelta
+    if duration == '1_month':
+        end_date = datetime.now() + timedelta(days=30)
+    elif duration == '2_months':
+        end_date = datetime.now() + timedelta(days=60)
+    elif duration == '3_months':
+        end_date = datetime.now() + timedelta(days=90)
+    else:  # lifetime
+        end_date = datetime(2099, 12, 31)
+    
+    # Add status and suspension_end columns if they don't exist
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "active"')
+        cursor.execute('ALTER TABLE users ADD COLUMN suspension_end DATE')
+    except sqlite3.OperationalError:
+        pass
+    
+    cursor.execute('''
+        UPDATE users SET status = 'suspended', suspension_end = ?
+        WHERE id = ?
+    ''', (end_date.date(), member_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Member suspended successfully'})
+
+@app.route('/api/admin/members/<int:member_id>/unsuspend', methods=['POST'])
+def unsuspend_member(member_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE users SET status = 'active', suspension_end = NULL
+        WHERE id = ?
+    ''', (member_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Member unsuspended successfully'})
+
+@app.route('/api/admin/members/<int:member_id>', methods=['DELETE'])
+def delete_member(member_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM users WHERE id = ?', (member_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Member deleted successfully'})
+
+@app.route('/api/admin/books/<int:book_id>/issue', methods=['POST'])
+def issue_book(book_id):
+    data = request.json
+    user_id = data.get('user_id')
+    custom_due_date = data.get('due_date')
+    overdue_fee = data.get('overdue_fee', 5.00)
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Check availability
+    cursor.execute('SELECT available_copies FROM books WHERE id = ?', (book_id,))
+    book = cursor.fetchone()
+    
+    if not book or book[0] <= 0:
+        conn.close()
+        return jsonify({'error': 'Book not available'}), 400
+    
+    # Issue book
+    issue_date = datetime.now().date()
+    if custom_due_date:
+        due_date = datetime.strptime(custom_due_date, '%Y-%m-%d').date()
+    else:
+        due_date = issue_date + timedelta(days=14)
+    
+    cursor.execute('''
+        INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status, overdue_fee_per_day)
+        VALUES (?, ?, ?, ?, 'issued', ?)
+    ''', (book_id, user_id, issue_date, due_date, overdue_fee))
+    
+    # Update available copies
+    cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Book issued successfully'})
+
+@app.route('/api/admin/issued-books', methods=['GET'])
+def get_issued_books():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT bi.id, b.title as book_title, b.author as book_author,
+               u.username as user_name, u.email as user_email,
+               bi.issue_date, bi.due_date, bi.fine_amount, bi.status
+        FROM book_issues bi
+        JOIN books b ON bi.book_id = b.id
+        JOIN users u ON bi.user_id = u.id
+        WHERE bi.status = 'issued'
+        ORDER BY bi.due_date ASC
+    ''')
+    issues = cursor.fetchall()
+    
+    issue_list = []
+    for issue in issues:
+        issue_list.append({
+            'id': issue[0],
+            'book_title': issue[1],
+            'book_author': issue[2],
+            'user_name': issue[3],
+            'user_email': issue[4],
+            'issue_date': issue[5],
+            'due_date': issue[6],
+            'fine_amount': float(issue[7]) if issue[7] else 0,
+            'status': issue[8]
+        })
+    
+    conn.close()
+    return jsonify(issue_list)
+
+@app.route('/api/admin/issues/<int:issue_id>/return', methods=['POST'])
+def return_book(issue_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT book_id FROM book_issues WHERE id = ?', (issue_id,))
+    book_result = cursor.fetchone()
+    
+    if book_result:
+        book_id = book_result[0]
+        cursor.execute('UPDATE book_issues SET status = "returned", return_date = date("now") WHERE id = ?', (issue_id,))
+        cursor.execute('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?', (book_id,))
+        conn.commit()
+    
+    conn.close()
+    return jsonify({'message': 'Book returned successfully'})
+
+@app.route('/api/admin/issues/<int:issue_id>/damage', methods=['POST'])
+def report_damage(issue_id):
+    data = request.json
+    damage_amount = data.get('damage_amount', 0)
+    damage_description = data.get('damage_description', '')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        UPDATE book_issues 
+        SET fine_amount = fine_amount + ?, damage_description = ?
+        WHERE id = ?
+    ''', (damage_amount, damage_description, issue_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Damage reported successfully'})
+
+@app.route('/api/admin/fines-count', methods=['GET'])
+def get_fines_count():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Get total fine amounts plus overdue fines
+    cursor.execute('''
+        SELECT 
+            COALESCE(SUM(bi.fine_amount), 0) as damage_total,
+            COALESCE(SUM(
+                CASE 
+                    WHEN bi.status = 'issued' AND bi.due_date < date('now') 
+                    THEN (julianday('now') - julianday(bi.due_date)) * bi.overdue_fee_per_day
+                    ELSE 0 
+                END
+            ), 0) as overdue_total
+        FROM book_issues bi
+        WHERE bi.status = 'issued'
+    ''')
+    result = cursor.fetchone()
+    total_amount = float(result[0] or 0) + float(result[1] or 0)
+    
+    conn.close()
+    return jsonify({'amount': total_amount})
+
+@app.route('/api/admin/fines', methods=['GET'])
+def get_all_fines():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT bi.id, u.username as member_name, u.email as member_email,
+               b.title as book_title, b.author as book_author,
+               bi.fine_amount, bi.damage_description, bi.issue_date, bi.due_date, bi.status,
+               bi.overdue_fee_per_day
+        FROM book_issues bi
+        JOIN books b ON bi.book_id = b.id
+        JOIN users u ON bi.user_id = u.id
+        WHERE (bi.fine_amount > 0 OR (bi.status = 'issued' AND bi.due_date < date('now')))
+        ORDER BY bi.issue_date DESC
+    ''')
+    fines = cursor.fetchall()
+    
+    fine_list = []
+    for fine in fines:
+        # Calculate overdue fine
+        overdue_fine = 0
+        if fine[9] == 'issued' and fine[8]:  # status is issued and has due_date
+            from datetime import datetime
+            due_date = datetime.strptime(fine[8], '%Y-%m-%d').date()
+            today = datetime.now().date()
+            if today > due_date:
+                days_overdue = (today - due_date).days
+                overdue_fine = days_overdue * float(fine[10] or 5.00)
+        
+        fine_list.append({
+            'id': fine[0],
+            'memberName': fine[1],
+            'memberEmail': fine[2],
+            'bookTitle': fine[3],
+            'bookAuthor': fine[4],
+            'damageFine': float(fine[5]) if fine[5] else 0,
+            'overdueFine': overdue_fine,
+            'damageDescription': fine[6] or '',
+            'issueDate': fine[7],
+            'dueDate': fine[8],
+            'status': fine[9]
+        })
+    
+    conn.close()
+    return jsonify(fine_list)
+
+@app.route('/api/user/<int:user_id>/fines', methods=['GET'])
+def get_user_fines(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT bi.id, u.username as member_name, u.email as member_email,
+               b.title as book_title, b.author as book_author,
+               bi.fine_amount, bi.damage_description, bi.issue_date, bi.due_date, bi.status,
+               bi.overdue_fee_per_day
+        FROM book_issues bi
+        JOIN books b ON bi.book_id = b.id
+        JOIN users u ON bi.user_id = u.id
+        WHERE bi.user_id = ? AND (bi.fine_amount > 0 OR (bi.status = 'issued' AND bi.due_date < date('now')))
+        ORDER BY bi.issue_date DESC
+    ''', (user_id,))
+    fines = cursor.fetchall()
+    
+    fine_list = []
+    for fine in fines:
+        # Calculate overdue fine
+        overdue_fine = 0
+        if fine[9] == 'issued' and fine[8]:  # status is issued and has due_date
+            from datetime import datetime
+            due_date = datetime.strptime(fine[8], '%Y-%m-%d').date()
+            today = datetime.now().date()
+            if today > due_date:
+                days_overdue = (today - due_date).days
+                overdue_fine = days_overdue * float(fine[10] or 5.00)
+        
+        fine_list.append({
+            'id': fine[0],
+            'memberName': fine[1],
+            'memberEmail': fine[2],
+            'bookTitle': fine[3],
+            'bookAuthor': fine[4],
+            'damageFine': float(fine[5]) if fine[5] else 0,
+            'overdueFine': overdue_fine,
+            'damageDescription': fine[6] or '',
+            'issueDate': fine[7],
+            'dueDate': fine[8],
+            'status': fine[9]
+        })
+    
+    conn.close()
+    return jsonify(fine_list)
+
+@app.route('/api/admin/fines/<int:fine_id>/pay-damage', methods=['POST'])
+def pay_damage_fine(fine_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('UPDATE book_issues SET fine_amount = 0 WHERE id = ?', (fine_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Damage fine paid successfully'})
+
+@app.route('/api/admin/fines/<int:fine_id>/pay-overdue', methods=['POST'])
+def pay_overdue_fine(fine_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('UPDATE book_issues SET overdue_fee_per_day = 0 WHERE id = ?', (fine_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Overdue fine paid successfully'})
+
+@app.route('/api/user/<int:user_id>/issued-books', methods=['GET'])
+def get_user_issued_books(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT bi.id, b.title, b.author, bi.issue_date, bi.due_date, bi.status,
+               bi.fine_amount, b.reading_time_minutes,
+               COALESCE(rp.progress_percentage, 0) as reading_progress
+        FROM book_issues bi
+        JOIN books b ON bi.book_id = b.id
+        LEFT JOIN reading_progress rp ON bi.book_id = rp.book_id AND bi.user_id = rp.user_id
+        WHERE bi.user_id = ? AND bi.status = 'issued'
+        ORDER BY bi.issue_date DESC
+    ''', (user_id,))
+    books = cursor.fetchall()
+    
+    book_list = []
+    for book in books:
+        book_list.append({
+            'id': book[0],
+            'title': book[1],
+            'author': book[2],
+            'issue_date': book[3],
+            'due_date': book[4],
+            'status': book[5],
+            'fine_amount': float(book[6]) if book[6] else 0,
+            'reading_time_minutes': book[7] or 180,
+            'reading_progress': book[8] or 0
+        })
+    
+    conn.close()
+    return jsonify(book_list)
+
+@app.route('/api/user/<int:user_id>/overdue-books', methods=['GET'])
+def get_user_overdue_books(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT bi.id FROM book_issues bi
+        WHERE bi.user_id = ? AND bi.status = 'issued' AND bi.due_date < date('now')
+    ''', (user_id,))
+    books = cursor.fetchall()
+    
+    conn.close()
+    return jsonify([{'id': book[0]} for book in books])
+
+@app.route('/api/user/<int:user_id>/reservations', methods=['GET'])
+def get_user_reservations(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # For now, return empty as we don't have a separate reservations table
+    conn.close()
+    return jsonify([])
+
+# Initialize database on import
+init_db()
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5001)
