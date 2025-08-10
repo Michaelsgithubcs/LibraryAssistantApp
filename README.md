@@ -7,7 +7,7 @@ A modern, AI-powered library management solution that transforms traditional lib
 ### 📖 User Experience
 - **Personalized Dashboard**: Track borrowed books, reading progress, and manage your library account in one place
 - **Digital & Physical Collections**: Seamlessly browse and manage both ebook and physical book collections
-- **Smart Categories**: Intuitive categorization including Fiction, Non-Fiction, Romance, Mystery, Sci-Fi, Poetry, and Biography
+- **Smart Categories**: Intuitive categorization including Fiction, Non-Fiction, Romance, Mystery, Sci-Fi, Poetry, and Biographyi
 - **Reading Analytics**: Track reading habits, completion rates, and reading streaks
 - **Community Engagement**: Rate books, write reviews, and see what others are reading
 

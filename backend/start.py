@@ -17,7 +17,7 @@ def main():
     print("✅ Database initialized successfully!")
     
     print("🌐 Starting Flask server...")
-    print("📍 Server will be available at: http://localhost:5001")
+    print("📍 Server will be available at: http://localhost:5000 or 5001")
     print("🔗 API endpoints:")
     print("   - GET  /api/books - Get all books")
     print("   - GET  /api/categories - Get book categories")
@@ -29,7 +29,11 @@ def main():
     print("🛑 Press Ctrl+C to stop the server\n")
     
     try:
+        print("⚠️  Port 5000 is in use. Starting on port 5001...")
         app.run(debug=True, host='0.0.0.0', port=5001)
+    except OSError as e:
+        print(f"❌ Error starting server: {e}")
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\n🛑 Server stopped by user")
         sys.exit(0)

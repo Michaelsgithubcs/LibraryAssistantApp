@@ -88,6 +88,10 @@ const Index = () => {
   }, [currentView]);
 
   const handleLogin = (user: CurrentUser) => {
+    if (user.role === 'user') {
+      alert('This web interface is for administrators only. Please use the mobile app for user access.');
+      return;
+    }
     setCurrentUser(user);
     localStorage.setItem('currentUser', JSON.stringify(user));
   };
@@ -105,10 +109,7 @@ const Index = () => {
     switch (currentView) {
       case "books":
         return <BookSearch user={currentUser} />;
-      case "mybooks":
-        return currentUser.role === "user" ? <MyBooks user={currentUser} /> : null;
-      case "ebooks":
-        return currentUser.role === "user" ? <EbookStore user={currentUser} /> : null;
+
       case "requests":
         return currentUser.role === "admin" ? <BookRequests user={currentUser} /> : null;
       case "upload":
@@ -119,12 +120,11 @@ const Index = () => {
         return currentUser.role === "admin" ? <IssueReturn /> : null;
       case "fines":
         return <FinesManagement user={currentUser} />;
-      case "chatbot":
-        return <LibraryChatbot user={currentUser} />;
+
       case "admin":
         return <AdminDashboard onNavigate={setCurrentView} user={currentUser} />;
       default:
-        return currentUser.role === "admin" ? <AdminDashboard onNavigate={setCurrentView} user={currentUser} /> : <UserDashboard user={currentUser} />;
+        return <AdminDashboard onNavigate={setCurrentView} user={currentUser} />;
     }
   };
 
@@ -196,22 +196,7 @@ const Index = () => {
                 )}
               </Button>
             )}
-            {currentUser.role === "user" && (
-              <Button
-                variant={currentView === "mybooks" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setCurrentView("mybooks")}
-              >
-                <BookOpen className="h-4 w-4 mr-2" />
-                My Books
-                {userReservationStatus.hasApproved && (
-                  <div className="w-2 h-2 bg-green-500 rounded-full ml-2"></div>
-                )}
-                {userReservationStatus.hasRejected && (
-                  <div className="w-2 h-2 bg-red-500 rounded-full ml-2"></div>
-                )}
-              </Button>
-            )}
+
 
             {currentUser.role === "admin" && (
               <>
@@ -239,28 +224,10 @@ const Index = () => {
               onClick={() => setCurrentView("fines")}
             >
               <CreditCard className="h-4 w-4 mr-2" />
-              {currentUser.role === "admin" ? "Fines Management" : "My Fines"}
+              Fines Management
             </Button>
-            {currentUser.role === "user" && (
-              <Button
-                variant={currentView === "chatbot" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setCurrentView("chatbot")}
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Library Assistant
-              </Button>
-            )}
-            {currentUser.role === "user" && (
-              <Button
-                variant={currentView === "ebooks" ? "default" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => setCurrentView("ebooks")}
-              >
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Ebook Store
-              </Button>
-            )}
+
+
           </div>
         </nav>
 

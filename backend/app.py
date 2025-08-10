@@ -5,12 +5,18 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 import secrets
+import google.generativeai as genai
 
 app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
 
 DATABASE = 'library.db'
+
+# Configure Gemini API key from env if present
+GENAI_API_KEY = os.environ.get('GEMINI_API_KEY')
+if GENAI_API_KEY:
+    genai.configure(api_key=GENAI_API_KEY)
 
 def init_db():
     conn = sqlite3.connect(DATABASE)
@@ -333,33 +339,35 @@ def get_categories():
 # Authentication routes
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
-    
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    hashed_password = hashlib.sha256(password.encode()).hexdigest()
-    cursor.execute('SELECT id, username, role, status FROM users WHERE email = ? AND password = ?', 
-                   (username, hashed_password))
-    user = cursor.fetchone()
-    
-    conn.close()
-    
-    if user:
-        if len(user) > 3 and user[3] == 'suspended':
-            return jsonify({'error': 'Account suspended'}), 403
-        return jsonify({
-            'id': user[0],
-            'username': user[1],
-            'role': user[2]
-        })
-    else:
-        return jsonify({'error': 'Invalid credentials'}), 401
+    try:
+        data = request.json or {}
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        cursor.execute('SELECT id, username, role FROM users WHERE email = ? AND password = ?', 
+                       (username, hashed_password))
+        user = cursor.fetchone()
+        
+        conn.close()
+        
+        if user:
+            return jsonify({
+                'id': user[0],
+                'username': user[1],
+                'role': user[2]
+            })
+        else:
+            return jsonify({'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        print(f'Login error: {e}')
+        return jsonify({'error': 'Server error'}), 500
 
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():
@@ -770,13 +778,21 @@ def return_book(issue_id):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
-    cursor.execute('SELECT book_id FROM book_issues WHERE id = ?', (issue_id,))
+    cursor.execute('SELECT book_id, user_id FROM book_issues WHERE id = ?', (issue_id,))
     book_result = cursor.fetchone()
     
     if book_result:
-        book_id = book_result[0]
+        book_id, user_id = book_result
         cursor.execute('UPDATE book_issues SET status = "returned", return_date = date("now") WHERE id = ?', (issue_id,))
         cursor.execute('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?', (book_id,))
+        
+        # Add to reading history when admin marks as returned
+        cursor.execute('''
+            INSERT OR REPLACE INTO reading_progress 
+            (book_id, user_id, progress_percentage, is_completed, completed_at)
+            VALUES (?, ?, 100, 1, CURRENT_TIMESTAMP)
+        ''', (book_id, user_id))
+        
         conn.commit()
     
     conn.close()
@@ -1156,31 +1172,164 @@ def get_reservation_count():
     conn.close()
     return jsonify({'count': count})
 
-@app.route('/api/user-reservations/<int:user_id>/mark-viewed', methods=['POST'])
-def mark_reservations_viewed(user_id):
+@app.route('/api/reservations/<int:reservation_id>/cancel', methods=['DELETE'])
+def cancel_reservation(reservation_id):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
     try:
-        cursor.execute('''
-            UPDATE book_reservations 
-            SET viewed = 1 
-            WHERE user_id = ? AND status IN ('approved', 'rejected')
-        ''', (user_id,))
+        cursor.execute('DELETE FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        
+        if cursor.rowcount == 0:
+            conn.close()
+            return jsonify({'error': 'Reservation not found or cannot be cancelled'}), 404
+        
         conn.commit()
-    except sqlite3.OperationalError:
-        # If viewed column doesn't exist, delete the reservations instead
+        conn.close()
+        return jsonify({'message': 'Reservation cancelled successfully'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/books/<int:book_id>/mark-read', methods=['POST'])
+def mark_book_as_read(book_id):
+    data = request.json
+    user_id = data.get('user_id')
+    
+    print(f'Mark as read - book_id: {book_id}, user_id: {user_id}')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Update reading progress to 100%
         cursor.execute('''
-            DELETE FROM book_reservations 
-            WHERE user_id = ? AND status IN ('approved', 'rejected')
-        ''', (user_id,))
+            INSERT OR REPLACE INTO reading_progress 
+            (book_id, user_id, progress_percentage, is_completed, completed_at)
+            VALUES (?, ?, 100, 1, CURRENT_TIMESTAMP)
+        ''', (book_id, user_id))
+        
+        print(f'Inserted reading progress - rows affected: {cursor.rowcount}')
+        
         conn.commit()
+        conn.close()
+        return jsonify({'message': 'Book marked as read successfully'})
+    except Exception as e:
+        print(f'Error marking as read: {e}')
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/issues/<int:issue_id>/mark-read', methods=['POST'])
+def mark_issue_as_read(issue_id):
+    data = request.json
+    user_id = data.get('user_id')
+    
+    print(f'Mark as read - issue_id: {issue_id}, user_id: {user_id}')
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Get the actual book_id from the issue
+        cursor.execute('SELECT book_id FROM book_issues WHERE id = ?', (issue_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return jsonify({'error': 'Issue not found'}), 404
+            
+        book_id = result[0]
+        print(f'Found book_id: {book_id} for issue_id: {issue_id}')
+        
+        # Update reading progress to 100%
+        cursor.execute('''
+            INSERT OR REPLACE INTO reading_progress 
+            (book_id, user_id, progress_percentage, is_completed, completed_at)
+            VALUES (?, ?, 100, 1, CURRENT_TIMESTAMP)
+        ''', (book_id, user_id))
+        
+        print(f'Inserted reading progress - rows affected: {cursor.rowcount}')
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Book marked as read successfully'})
+    except Exception as e:
+        print(f'Error marking as read: {e}')
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/<int:user_id>/read-history', methods=['GET'])
+def get_read_history(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT b.id, b.title, b.author, rp.completed_at as completed_date
+        FROM reading_progress rp
+        JOIN books b ON rp.book_id = b.id
+        WHERE rp.user_id = ? AND rp.is_completed = 1
+        ORDER BY rp.completed_at DESC
+    ''', (user_id,))
+    
+    history = cursor.fetchall()
+    
+    history_list = []
+    for item in history:
+        history_list.append({
+            'id': item[0],
+            'title': item[1],
+            'author': item[2],
+            'completed_date': item[3]
+        })
     
     conn.close()
-    return jsonify({'message': 'Reservations marked as viewed'})
+    return jsonify(history_list)
 
 # Initialize database on import
 init_db()
+
+@app.route('/api/ai/book-assistant', methods=['POST'])
+def ai_book_assistant():
+    try:
+        if not GENAI_API_KEY:
+            return jsonify({'error': 'AI not configured'}), 500
+
+        data = request.json or {}
+        book = data.get('book')  # expects {title, author, description, category, ...}
+        question = data.get('question', '').strip()
+        if not book or not question:
+            return jsonify({'error': 'book and question are required'}), 400
+
+        system_prompt = (
+            "You are a helpful study assistant for library books. "
+            "ONLY answer questions related to the provided book context. "
+            "If the user asks something off-topic, politely redirect them back to the book. "
+            "Provide clear, structured, study-friendly answers: summaries, themes, characters, plot, quotes, and exam-style insights."
+        )
+
+        book_context = (
+            f"Title: {book.get('title','')}\n"
+            f"Author: {book.get('author','')}\n"
+            f"Category: {book.get('category','')}\n"
+            f"Description: {book.get('description','')}\n"
+        )
+
+        user_prompt = (
+            f"Book Context:\n{book_context}\n\n"
+            f"User Question (must be about this book): {question}"
+        )
+
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content([
+            {"role": "user", "parts": [system_prompt]},
+            {"role": "user", "parts": [user_prompt]},
+        ])
+
+        text = response.text if hasattr(response, 'text') else str(response)
+        return jsonify({ 'answer': text })
+    except Exception as e:
+        print(f"AI error: {e}")
+        return jsonify({'error': 'AI request failed'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
