@@ -205,7 +205,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📦 Project Structure
 
 ```
-learnly-library-aid/
+learnly-library-aid-main/
 ├── src/
 │   ├── components/
 │   │   ├── UserDashboard.tsx
@@ -221,8 +221,23 @@ learnly-library-aid/
 │   ├── start.py
 │   ├── requirements.txt
 │   └── README.md
-└── public/
+├── public/
+│   ├── books.png
+│   ├── home.png
+│   ├── more.png
+│   ├── notifications.png
+│   └── store.png
+├── LibraryApp/   # 📱 New: Mobile app (React Native)
+│   ├── App.tsx
+│   └── src/
+│       └── screens/
+│           ├── BookChatScreen.tsx
+│           └── NotificationsScreen.tsx
+└── ...
 ```
+
+- `LibraryApp/` contains the React Native mobile app implementation.
+- `public/` now contains new image assets for UI enhancements.
 
 ## 🎯 Usage Examples
 
@@ -239,9 +254,35 @@ learnly-library-aid/
 3. **User Management**: Manage member accounts
 4. **Analytics**: View library usage statistics
 
+## 📱 Mobile Application
+
+A new **React Native mobile app** is now included in the `LibraryApp/` directory. This app provides:
+- Mobile access to library resources
+- Book search and chat features (see `BookChatScreen.tsx`)
+- Notifications for due dates and library events (see `NotificationsScreen.tsx`)
+- Seamless integration with the backend API
+
+### Mobile App Setup
+
+1. Navigate to the mobile app directory:
+   ```bash
+   cd LibraryApp
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+3. Run the app (for iOS or Android):
+   ```bash
+   npx expo start
+   ```
+
+See the `LibraryApp/` README for additional configuration.
+
 ## 🔮 Future Enhancements
 
-- **Mobile App**: React Native implementation
 - **Advanced Search**: AI-powered book recommendations
 - **Social Features**: Book clubs and reading groups
 - **Integration**: Connect with external book APIs
