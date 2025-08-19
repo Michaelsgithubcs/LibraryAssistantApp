@@ -192,15 +192,41 @@ export const apiClient = {
   },
   
   async getReadHistory(userId: number): Promise<IssuedBook[]> {
-    try {
-      const response = await fetch(`${API_BASE}/user/${userId}/read-history`);
-      if (!response.ok) return [];
-      return response.json();
-    } catch (error) {
+    const response = await fetch(`${API_BASE}/users/${userId}/history`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch read history');
+    }
+    return response.json();
+  },
+
+  async getRecommendations(userId: number, type: 'hybrid' | 'collaborative' | 'content' = 'hybrid', limit: number = 5): Promise<Book[]> {
+    const response = await fetch(`${API_BASE}/recommendations/${userId}?type=${type}&limit=${limit}`);
+    if (!response.ok) {
+      console.warn('Failed to fetch recommendations, using fallback');
       return [];
     }
+    
+    const data = await response.json();
+    if (!data.success) {
+      console.warn('Failed to get recommendations:', data.error);
+      return [];
+    }
+    
+    return data.recommendations.map((book: any) => ({
+      id: book.id.toString(),
+      title: book.title,
+      author: book.author,
+      category: book.category,
+      description: book.description || '',
+      availableCopies: book.available_copies || book.availableCopies || 1,
+      totalCopies: book.total_copies || 1,
+      publishDate: book.publish_date || '',
+      coverImage: book.cover_image || '',
+      avg_rating: book.avg_rating || book.rating || 0,
+      rating_count: book.rating_count || 0
+    }));
   },
-  
+
   async updateUserEmail(userId: number, newEmail: string, currentPassword: string): Promise<{ message: string }> {
     try {
       const response = await fetch(`${API_BASE}/user/${userId}/update-email`, {

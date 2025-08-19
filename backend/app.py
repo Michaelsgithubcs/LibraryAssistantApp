@@ -2,10 +2,17 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
 import os
+import sys
+import logging
 from datetime import datetime, timedelta
 import hashlib
 import secrets
 import google.generativeai as genai
+from recommendation_service import RecommendationService
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -890,6 +897,55 @@ def get_all_fines():
     conn.close()
     return jsonify(fine_list)
 
+@app.route('/api/users/<int:user_id>/history', methods=['GET'])
+def get_user_history(user_id):
+    """Get user's book issue history"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get all book issues for the user
+        cursor.execute('''
+            SELECT bi.id, b.id as book_id, b.title, b.author, b.cover_image,
+                   bi.issue_date, bi.due_date, bi.return_date,
+                   bi.status, bi.fine_amount, bi.overdue_fee_per_day
+            FROM book_issues bi
+            JOIN books b ON bi.book_id = b.id
+            WHERE bi.user_id = ?
+            ORDER BY bi.issue_date DESC
+        ''', (user_id,))
+        
+        history = []
+        for row in cursor.fetchall():
+            issue = dict(row)
+            issue['is_overdue'] = False
+            
+            # Check if book is overdue
+            if issue['status'] == 'issued' and issue['due_date']:
+                due_date = datetime.strptime(issue['due_date'], '%Y-%m-%d').date()
+                if datetime.now().date() > due_date:
+                    issue['is_overdue'] = True
+                    
+            # Convert decimal to float for JSON serialization
+            issue['fine_amount'] = float(issue['fine_amount']) if issue['fine_amount'] else 0.0
+            issue['overdue_fee_per_day'] = float(issue['overdue_fee_per_day']) if issue['overdue_fee_per_day'] else 5.0
+            
+            history.append(issue)
+            
+        return jsonify({
+            'success': True,
+            'history': history
+        })
+        
+    except Exception as e:
+        print(f"Error getting user history: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to fetch history',
+            'details': str(e)
+        }), 500
+
 @app.route('/api/user/<int:user_id>/fines', methods=['GET'])
 def get_user_fines(user_id):
     conn = sqlite3.connect(DATABASE)
@@ -1288,48 +1344,204 @@ def get_read_history(user_id):
 # Initialize database on import
 init_db()
 
-@app.route('/api/ai/book-assistant', methods=['POST'])
+# Initialize recommendation service
+recommendation_service = RecommendationService(DATABASE)
+
+@app.route('/api/ai/assistant', methods=['POST'])
 def ai_book_assistant():
+    if not GENAI_API_KEY:
+        return jsonify({'error': 'AI features are not configured'}), 503
+        
+    data = request.get_json()
+    user_message = data.get('message', '')
+    
     try:
-        if not GENAI_API_KEY:
-            return jsonify({'error': 'AI not configured'}), 500
+        # Initialize the model
+        model = genai.GenerativeModel('gemini-pro')
+        
+        # Create a chat session
+        chat = model.start_chat(history=[])
+        
+        # Prepare the prompt
+        prompt = f"""You are a helpful library assistant. Answer the following question about books or library services in a friendly and informative way.
+        
+        User: {user_message}
+        
+        Assistant:"""
+        
+        # Get the response
+        response = chat.send_message(prompt)
+        
+        return jsonify({
+            'response': response.text,
+            'sources': []
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recommendations/<int:user_id>', methods=['GET'])
+def get_recommendations(user_id):
+    try:
+        # Get recommendation type from query params (default: hybrid)
+        rec_type = request.args.get('type', 'hybrid')
+        limit = min(int(request.args.get('limit', '10')), 20)  # Max 20 recommendations
+        use_bert = request.args.get('use_bert', 'true').lower() == 'true'
+        
+        # Get recommendations based on type
+        if rec_type == 'content':
+            book_ids = recommendation_service.content_based_filtering(
+                user_id, limit, use_bert=use_bert
+            )
+            rec_type_name = 'content_based'
+        elif rec_type == 'association':
+            book_ids = recommendation_service.get_association_recommendations(
+                user_id, limit
+            )
+            rec_type_name = 'association_rules'
+        elif rec_type == 'popular':
+            book_ids = recommendation_service.get_popular_recommendations(
+                user_id, limit
+            )
+            rec_type_name = 'popular'
+        else:  # hybrid (default)
+            # Use the hybrid recommendation that combines all methods
+            recommendations = recommendation_service.hybrid_recommendation(
+                user_id, limit, use_bert=use_bert
+            )
+            return jsonify({
+                'success': True,
+                'recommendations': recommendations,
+                'type': 'hybrid',
+                'count': len(recommendations)
+            })
+        
+        # For non-hybrid recommendations, get book details
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        placeholders = ','.join(['?'] * len(book_ids))
+        cursor.execute(f'''
+            SELECT id, title, author, category, 
+                   COALESCE(description, '') as description,
+                   COALESCE(cover_image, '') as cover_image, 
+                   available_copies
+            FROM books 
+            WHERE id IN ({placeholders})
+            ORDER BY CASE id {' '.join([f'WHEN {bid} THEN {i}' for i, bid in enumerate(book_ids)])} END
+        ''', book_ids)
+        
+        recommendations = [dict(book) for book in cursor.fetchall()]
+        
+        # Add recommendation type to each book
+        for book in recommendations:
+            book['recommendation_type'] = rec_type_name
+        
+        return jsonify({
+            'success': True,
+            'recommendations': recommendations,
+            'type': rec_type_name,
+            'count': len(recommendations)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_recommendations: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to generate recommendations',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/ai/book-assistant', methods=['POST'])
+def ai_book_assistant_v2():
+    try:
+        print("AI Assistant endpoint called")
+        # Check for either GENAI_API_KEY or GEMINI_API_KEY
+        api_key = os.getenv('GENAI_API_KEY') or os.getenv('GEMINI_API_KEY')
+        print(f"API Key found: {'Yes' if api_key else 'No'}")
+        
+        if not api_key:
+            print("Error: No API key found in environment variables")
+            return jsonify({'error': 'AI not configured: Missing API key'}), 500
+            
+        try:
+            # Configure the Google Generative AI client
+            print("Configuring GenAI client...")
+            genai.configure(api_key=api_key)
+            print("GenAI client configured successfully")
+        except Exception as config_error:
+            print(f"Error configuring GenAI client: {str(config_error)}")
+            return jsonify({'error': f'Failed to configure AI: {str(config_error)}'}), 500
 
         data = request.json or {}
+        print(f"Received data: {data}")
+        
         book = data.get('book')  # expects {title, author, description, category, ...}
         question = data.get('question', '').strip()
+        
         if not book or not question:
+            print(f"Error: Missing book or question. Book: {bool(book)}, Question: {bool(question)}")
             return jsonify({'error': 'book and question are required'}), 400
 
-        system_prompt = (
-            "You are a helpful study assistant for library books. "
-            "ONLY answer questions related to the provided book context. "
-            "If the user asks something off-topic, politely redirect them back to the book. "
-            "Provide clear, structured, study-friendly answers: summaries, themes, characters, plot, quotes, and exam-style insights."
-        )
+        try:
+            system_prompt = (
+                "You are a helpful study assistant for library books. "
+                "ONLY answer questions related to the provided book context. "
+                "If the user asks something off-topic, politely redirect them back to the book. "
+                "Provide clear, structured, study-friendly answers: summaries, themes, characters, plot, quotes, and exam-style insights."
+            )
 
-        book_context = (
-            f"Title: {book.get('title','')}\n"
-            f"Author: {book.get('author','')}\n"
-            f"Category: {book.get('category','')}\n"
-            f"Description: {book.get('description','')}\n"
-        )
+            book_context = (
+                f"Title: {book.get('title','')}\n"
+                f"Author: {book.get('author','')}\n"
+                f"Category: {book.get('category','')}\n"
+                f"Description: {book.get('description','')}\n"
+            )
 
-        user_prompt = (
-            f"Book Context:\n{book_context}\n\n"
-            f"User Question (must be about this book): {question}"
-        )
+            user_prompt = (
+                f"Book Context:\n{book_context}\n\n"
+                f"User Question (must be about this book): {question}"
+            )
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content([
-            {"role": "user", "parts": [system_prompt]},
-            {"role": "user", "parts": [user_prompt]},
-        ])
+            print("Sending request to Gemini API...")
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content([
+                {"role": "user", "parts": [system_prompt]},
+                {"role": "user", "parts": [user_prompt]},
+            ])
+            print("Received response from Gemini API")
 
-        text = response.text if hasattr(response, 'text') else str(response)
-        return jsonify({ 'answer': text })
+            text = response.text if hasattr(response, 'text') else str(response)
+            print(f"Response text length: {len(text) if text else 0} characters")
+            
+            if not text or len(text.strip()) == 0:
+                print("Error: Empty response from Gemini API")
+                return jsonify({'error': 'AI returned an empty response'}), 500
+                
+            return jsonify({ 'answer': text })
+            
+        except Exception as ai_error:
+            print(f"Error in AI processing: {str(ai_error)}")
+            print(f"Error type: {type(ai_error).__name__}")
+            if hasattr(ai_error, 'args'):
+                print(f"Error args: {ai_error.args}")
+            return jsonify({
+                'error': 'AI processing failed',
+                'details': str(ai_error),
+                'type': type(ai_error).__name__
+            }), 500
+            
     except Exception as e:
-        print(f"AI error: {e}")
-        return jsonify({'error': 'AI request failed'}), 500
+        print(f"Unexpected error in AI assistant: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        if hasattr(e, 'args'):
+            print(f"Error args: {e.args}")
+        return jsonify({
+            'error': 'AI request failed',
+            'details': str(e),
+            'type': type(e).__name__
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

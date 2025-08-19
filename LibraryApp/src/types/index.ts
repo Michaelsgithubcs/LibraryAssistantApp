@@ -17,10 +17,24 @@ export interface Book {
   publishDate: string;
   avg_rating?: number;
   rating_count?: number;
+  rating?: number;
+  estimatedTime?: number;
+  coverImage?: string;
+  reading_time_minutes?: number;
+  
+  // Recommendation related fields
+  recommendationType?: 'content_based' | 'association_rules' | 'hybrid' | 'popular' | 'general';
+  recommendationScore?: number;
+  
+  // Backend response fields (snake_case)
+  cover_image?: string;
+  recommendation_type?: string;
+  score?: number; // Recommendation score from the backend
 }
 
 export interface IssuedBook {
   id: string;
+  book_id: string;
   title: string;
   author: string;
   issue_date: string;
@@ -47,6 +61,7 @@ export interface Fine {
 
 export interface ReservationStatus {
   id: string;
+  book_id: string;
   status: 'approved' | 'rejected' | 'pending';
   rejection_reason?: string;
   book_title: string;

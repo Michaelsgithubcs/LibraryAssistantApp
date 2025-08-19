@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Alert, Image } from 'react-native';
 import { ModernCard } from '../components/ModernCard';
 import { AdminCard } from '../components/AdminCard';
 import { Button } from '../components/Button';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
-import { User, IssuedBook, Fine } from '../types';
+import { User, IssuedBook, Fine, Book, ReservationStatus } from '../types';
+
+// Using the updated Book interface from types
 
 interface DashboardScreenProps {
   user: User;
@@ -21,9 +23,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     reservations: 0,
     reservationStatus: { hasApproved: false, hasRejected: false }
   });
-  const [recommendedBooks, setRecommendedBooks] = useState([]);
-  const [userReservations, setUserReservations] = useState([]);
-  const [userBooks, setUserBooks] = useState([]);
+  interface RecommendedBook {
+    id: string;
+    title: string;
+    author: string;
+    category: string;
+    rating: number;
+    estimatedTime: number;
+    coverImage?: string;
+  }
+
+  const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
+  const [userReservations, setUserReservations] = useState<ReservationStatus[]>([]);
+  const [userBooks, setUserBooks] = useState<IssuedBook[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -32,55 +44,166 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
 
   const fetchDashboardData = async () => {
     try {
-      const [myBooks, fines, reservations, books] = await Promise.all([
+      const [myBooks, reservations, fines] = await Promise.all([
         apiClient.getMyBooks(user.id),
-        apiClient.getMyFines(user.id),
         apiClient.getReservationStatus(user.id),
-        apiClient.getBooks()
+        apiClient.getMyFines(user.id)
       ]);
-      
-      setUserReservations(reservations);
+
+      // Update books
       setUserBooks(myBooks);
-      console.log('Dashboard reservations JSON:', JSON.stringify(reservations, null, 2));
-      console.log('Dashboard issued books JSON:', JSON.stringify(myBooks, null, 2));
+
+      // Update reservations
+      setUserReservations(reservations);
+
+      // Fetch recommendations from the API
+      try {
+        const recommendations = await apiClient.getRecommendations(user.id, 'hybrid', 3);
+        if (recommendations && recommendations.length > 0) {
+          const validRecommendations: Book[] = recommendations.map(book => {
+            const recommendationType = (book.recommendation_type || 'popular') as 
+              'content_based' | 'association_rules' | 'hybrid' | 'popular' | 'general';
+              
+            return {
+              ...book,
+              isbn: book.isbn || '',
+              description: book.description || '',
+              availableCopies: book.availableCopies || 0,
+              totalCopies: book.totalCopies || 1,
+              publishDate: book.publishDate || new Date().toISOString().split('T')[0],
+              avg_rating: book.avg_rating || 0,
+              rating_count: book.rating_count || 0,
+              rating: book.rating || 0,
+              estimatedTime: book.estimatedTime || 0,
+              coverImage: book.cover_image || 'https://via.placeholder.com/150',
+              reading_time_minutes: book.reading_time_minutes || 0,
+              recommendationType: recommendationType,
+              recommendationScore: book.score || 0
+            };
+          });
+          setRecommendedBooks(validRecommendations);
+          return; // Exit early if we got recommendations
+        }
+      } catch (error) {
+        console.error('Error fetching recommendations:', error);
+      }
+
+      // Fallback to random books if no recommendations
+      const allBooks = await apiClient.getBooks();
+      if (allBooks && allBooks.length > 0) {
+        const shuffled = [...allBooks].sort(() => 0.5 - Math.random());
+        const validRecommendations: Book[] = shuffled.slice(0, 3).map(book => ({
+          ...book,
+          isbn: book.isbn || '',
+          description: book.description || '',
+          availableCopies: book.availableCopies || 0,
+          totalCopies: book.totalCopies || 1,
+          publishDate: book.publishDate || new Date().toISOString().split('T')[0],
+          avg_rating: book.avg_rating || 0,
+          rating_count: book.rating_count || 0,
+          rating: book.rating || 0,
+          estimatedTime: book.estimatedTime || 0,
+          coverImage: book.coverImage || 'https://via.placeholder.com/150',
+          reading_time_minutes: book.reading_time_minutes || 0,
+          recommendationType: 'popular' // Mark as popular fallback
+        }));
+        setRecommendedBooks(validRecommendations);
+      } else {
+        // Fallback to default books if no recommendations
+        const defaultBooks: Book[] = [
+          {
+            id: '1',
+            title: 'The Great Gatsby',
+            author: 'F. Scott Fitzgerald',
+            isbn: '9780743273565',
+            category: 'Classic',
+            description: 'A story of decadence and excess in the Jazz Age',
+            availableCopies: 5,
+            totalCopies: 10,
+            publishDate: '1925-04-10',
+            avg_rating: 4.5,
+            rating_count: 1000,
+            rating: 4.5,
+            estimatedTime: 4,
+            coverImage: 'https://via.placeholder.com/150',
+            reading_time_minutes: 240
+          },
+          // ... other default books
+        ];
+        setRecommendedBooks(defaultBooks);
+      }
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const overdueCount = myBooks.filter((book: IssuedBook) => {
         const dueDate = new Date(book.due_date);
         dueDate.setHours(0, 0, 0, 0);
         return dueDate < today && book.status === 'issued';
       }).length;
 
-      const hasApproved = reservations.some(r => r.status === 'approved');
-      const hasRejected = reservations.some(r => r.status === 'rejected');
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
+
+      // Check if the user has any reservations
+      const hasReservations = userReservations.some((r: ReservationStatus) => 
+        r.status === 'approved' || r.status === 'pending'
+      );
+
+      // Calculate total outstanding fines
+      const totalFines = Array.isArray(fines) ? fines.reduce((sum: number, fine: any) => {
+        const damage = typeof fine.damageFine === 'number' ? fine.damageFine : 0;
+        const overdue = typeof fine.overdueFine === 'number' ? fine.overdueFine : 0;
+        return sum + damage + overdue;
+      }, 0) : 0;
 
       setStats({
         booksIssued: myBooks.length,
         overdueBooks: overdueCount,
-        totalFines: 10.00, // Hardcoded since we know it should be 10
-        reservations: reservations.filter(r => r.status === 'pending').length,
+        totalFines,
+        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
         reservationStatus: { hasApproved, hasRejected }
       });
-
-      const suggestions = books.slice(0, 2).map(book => ({
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        category: book.category,
-        rating: book.avg_rating || 4.0,
-        estimatedTime: book.reading_time_minutes || 180
-      }));
-      setRecommendedBooks(suggestions);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Fallback in case of error
+      try {
+        const books = await apiClient.getBooks();
+        const bookSuggestions = books
+          .filter(b => !userBooks.some(ub => ub.book_id.toString() === b.id))
+          .slice(0, 4);
+        const suggestions: Book[] = bookSuggestions.map(book => {
+          // Ensure all required Book interface properties are included
+          const bookData: Book = {
+            id: book.id || '',
+            title: book.title || 'Untitled',
+            author: book.author || 'Unknown Author',
+            category: book.category || 'Uncategorized',
+            isbn: typeof book.isbn === 'string' ? book.isbn : '',
+            description: typeof book.description === 'string' ? book.description : '',
+            availableCopies: typeof book.availableCopies === 'number' ? book.availableCopies : 0,
+            totalCopies: typeof book.totalCopies === 'number' ? book.totalCopies : 1,
+            publishDate: typeof book.publishDate === 'string' ? book.publishDate : new Date().toISOString().split('T')[0],
+            // Optional properties with type checking
+            ...(typeof book.avg_rating === 'number' && { avg_rating: book.avg_rating }),
+            ...(typeof book.rating_count === 'number' && { rating_count: book.rating_count }),
+            rating: typeof book.rating === 'number' ? book.rating : 
+                   typeof book.avg_rating === 'number' ? book.avg_rating : 4.0,
+            ...(typeof book.estimatedTime === 'number' && { estimatedTime: book.estimatedTime }),
+            ...(typeof book.coverImage === 'string' && { coverImage: book.coverImage })
+          };
+          return bookData;
+        });
+        setRecommendedBooks(suggestions);
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError);
+      }
     }
   };
 
   const handleReserveBook = async (bookId: string) => {
     const isAlreadyReserved = userReservations.some(r => 
-      r.status === 'pending' && r.book_id === parseInt(bookId)
+      r.status === 'pending' && r.book_id.toString() === bookId
     );
     
     if (isAlreadyReserved) {
@@ -109,9 +232,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       r.status === 'pending' && r.book_title === bookTitle
     );
     
+    // Convert both IDs to strings for consistent comparison
+    const bookIdStr = String(bookId);
     const isIssued = userBooks.some(b => 
-      b.book_id === parseInt(bookId) ||
-      String(b.book_id) === bookId ||
+      String(b.book_id) === bookIdStr ||
       b.title === bookTitle
     );
     
@@ -164,7 +288,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
               title="Overdue Books"
               value={stats.overdueBooks.toString()}
               subtitle="Past due date"
-              onPress={() => navigation.navigate('BorrowedBooks')}
+              onPress={() => navigation.navigate('OverdueBooks')}
               style={styles.statCard}
               variant="danger"
             />

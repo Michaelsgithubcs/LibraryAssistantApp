@@ -66,7 +66,7 @@ export const OverdueBooksScreen: React.FC<OverdueBooksScreenProps> = ({ user, na
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Card>
-        <Text style={commonStyles.subtitle}>📚 Overdue Books</Text>
+        <Text style={commonStyles.subtitle}>Overdue Books</Text>
         <Text style={commonStyles.textSecondary}>
           Books that are past their due date
         </Text>
@@ -136,16 +136,13 @@ export const OverdueBooksScreen: React.FC<OverdueBooksScreenProps> = ({ user, na
 
 const styles = StyleSheet.create({
   overdueCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.danger,
+    marginBottom: 16,
   },
-  
   bookHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 12,
   },
-  
   overdueDetails: {
     marginBottom: 12,
   },
