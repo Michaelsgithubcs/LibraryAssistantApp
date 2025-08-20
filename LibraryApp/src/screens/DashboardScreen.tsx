@@ -203,8 +203,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     );
     
     const isIssued = userBooks.some(b => 
-      b.book_id === parseInt(bookId) ||
-      String(b.book_id) === bookId ||
+      String(b.book_id) === String(bookId) ||
       b.title === bookTitle
     );
     

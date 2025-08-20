@@ -7,7 +7,7 @@ import { Input } from '../components/Input';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
-import { User, Book } from '../types';
+import { User, Book, ReservationStatus, IssuedBook } from '../types';
 
 interface MyBooksScreenProps {
   user: User;
@@ -17,8 +17,8 @@ interface MyBooksScreenProps {
 export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
-  const [reservations, setReservations] = useState([]);
-  const [userBooks, setUserBooks] = useState([]);
+  const [reservations, setReservations] = useState<ReservationStatus[]>([]);
+  const [userBooks, setUserBooks] = useState<IssuedBook[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
@@ -75,7 +75,11 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
 
   const handleReserve = async (bookId: string, title: string) => {
     // Check if already reserved
-    const isReserved = reservations.some(r => r.book_id === parseInt(bookId));
+    const bookIdNum = parseInt(bookId, 10);
+    const isReserved = reservations.some(r => 
+      (typeof r.book_id === 'number' ? r.book_id === bookIdNum : String(r.book_id) === bookId) || 
+      r.book_title === title
+    );
     if (isReserved) {
       Alert.alert('Already Reserved', 'You have already reserved this book.');
       return;
@@ -92,13 +96,16 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
   };
   
   const getBookStatus = (bookId: string, bookTitle: string, availableCopies: number) => {
+    const bookIdNum = parseInt(bookId, 10);
     const isReserved = reservations.some(r => 
-      r.status === 'pending' && r.book_title === bookTitle
+      r.status === 'pending' && (
+        (typeof r.book_id === 'number' ? r.book_id === bookIdNum : String(r.book_id) === bookId) ||
+        r.book_title === bookTitle
+      )
     );
     
     const isIssued = userBooks.some(b => 
-      b.book_id === parseInt(bookId) ||
-      String(b.book_id) === bookId ||
+      (typeof b.book_id === 'number' ? b.book_id === bookIdNum : String(b.book_id) === bookId) ||
       b.title === bookTitle
     );
     

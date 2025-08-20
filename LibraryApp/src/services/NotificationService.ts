@@ -100,10 +100,11 @@ class NotificationService {
   };
 
   // Legacy local notification
-  localNotification = (title: string, message: string, data = {}) => {
+  localNotification = (title: string, message: string, data: { type?: string; [key: string]: any } = {}) => {
     // Create notification object matching NotificationBase
     const notification = {
       id: Date.now().toString(),
+      type: data.type || 'info', // Default to 'info' if type not provided
       title,
       message,
       timestamp: new Date().toISOString(),

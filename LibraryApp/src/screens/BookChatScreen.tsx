@@ -234,10 +234,10 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
                   onLongPress={() => setReplyingTo(message)}
                   activeOpacity={0.85}
                 >
-                  <Card style={[
-                    styles.messageBubble,
-                    message.isUser ? styles.userBubble : styles.botBubble
-                  ]}>
+                  <Card style={{
+                    ...styles.messageBubble,
+                    ...(message.isUser ? styles.userBubble : styles.botBubble)
+                  }}>
                     {message.replyTo && (
                       <View style={{ marginBottom: 2, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: colors.primary, opacity: 0.7 }}>
                         <Text style={[commonStyles.textMuted, { fontSize: 12, fontStyle: 'italic' }]} numberOfLines={1}>
@@ -275,7 +275,10 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
 
         {isTyping && (
           <View style={[styles.messageContainer, styles.botMessage]}>
-            <Card style={[styles.messageBubble, styles.botBubble]}>
+            <Card style={{
+              ...styles.messageBubble,
+              ...styles.botBubble
+            }}>
               <Text style={[commonStyles.textSecondary, styles.typingText]}>
                 Book Assistant is analyzing...
               </Text>

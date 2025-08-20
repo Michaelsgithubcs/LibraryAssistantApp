@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export interface NotificationBase {
   id: string;
+  type: string;
   title: string;
   message: string;
   timestamp: string;

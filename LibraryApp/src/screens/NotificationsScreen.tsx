@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNotificationContext } from '../context/NotificationContext';
+import { useNotifications } from '../components/NotificationProvider';
+import { Notification } from '../store/slices/notificationSlice';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, StatusBar } from 'react-native';
 import ReservationIcon from '../../assets/icons/notifications icons/reservation-notification.svg';
@@ -20,18 +21,10 @@ interface NotificationsScreenProps {
   navigation: any;
 }
 
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  data: any;
-}
+// Using Notification interface from notificationSlice
 
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, navigation }) => {
-  const { notifications, markAsRead, setNotifications } = useNotificationContext();
+  const { notifications, markAsRead, setNotifications } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -160,7 +153,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
             type: 'returned',
             title: 'Book Returned',
             message: `"${book.title}" has been successfully returned. Thank you for reading!`,
-            timestamp: book.return_date || new Date().toISOString(),
+            timestamp: book.due_date || new Date().toISOString(),
             read: false,
             data: book
           });
@@ -280,10 +273,13 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       >
         {notifications.length > 0 ? (
           notifications.map((notification) => (
-            <ModernCard key={notification.id} variant="elevated" style={[
-              styles.notificationCard,
-              !notification.read && styles.unreadCard
-            ]}>
+            <ModernCard 
+              key={notification.id} 
+              variant="elevated" 
+              style={{
+                ...styles.notificationCard,
+                ...(!notification.read && styles.unreadCard)
+              }}>
                 <View style={styles.notificationHeader}>
                 <View style={[
                   styles.notificationIcon,

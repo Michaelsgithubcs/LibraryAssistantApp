@@ -3,6 +3,8 @@ export interface User {
   username: string;
   email: string;
   role: string;
+  created_at?: string;
+  [key: string]: any; // Add index signature to allow additional properties
 }
 
 export interface Book {

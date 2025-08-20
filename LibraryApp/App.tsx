@@ -18,7 +18,8 @@ import { Provider } from 'react-redux';
 import { store } from './src/store';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
-import NotificationCenter from './src/components/NotificationCenter';
+import { useNotifications } from './src/components/NotificationProvider';
+import NotificationProvider from './src/components/NotificationProvider';
 
 // Define LoginScreen props type
 interface LoginScreenProps {
@@ -185,7 +186,7 @@ const TabNavigator = ({ user }: { user: any }) => {
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Notifications</Text>
           ),
           tabBarIcon: ({ size, focused }) => {
-            const { unreadCount } = useNotificationContext();
+            const { unreadCount } = useNotifications();
             return (
               <View style={{ alignItems: 'center' }}>
                 {focused ? (
@@ -302,7 +303,7 @@ const AppContent = () => {
   }
 
   return (
-    <>
+    <NotificationProvider>
       <NavigationContainer>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -311,34 +312,86 @@ const AppContent = () => {
               name="Main" 
               children={() => <MainNavigator user={user} />}
               options={{
-                headerShown: true,
-                title: 'Library',
-                headerRight: () => (
-                  <NotificationHeaderButton onPress={() => setIsNotificationVisible(true)} />
-                ),
+                headerShown: false
               }}
             />
           ) : (
             <Stack.Screen name="Login">
-            {() => (
-              <LoginScreen 
-                onLogin={(user) => {
-                  // Handle login logic here
-                  console.log('Login attempt with user:', user);
-                }} 
-              />
-            )}
-          </Stack.Screen>
+              {() => (
+                <LoginScreen 
+                  onLogin={(user) => {
+                    // Handle login logic here
+                    console.log('Login attempt with user:', user);
+                  }} 
+                />
+              )}
+            </Stack.Screen>
           )}
         </Stack.Navigator>
         
-        {/* Notification Center */}
-        <NotificationCenter 
-          isVisible={isNotificationVisible} 
-          onClose={() => setIsNotificationVisible(false)} 
-        />
+        {/* Notification Modal */}
+        {isNotificationVisible && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 1000,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <View style={{
+              backgroundColor: 'white',
+              padding: 20,
+              borderRadius: 10,
+              width: '90%',
+              maxHeight: '80%',
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Notifications</Text>
+                <TouchableOpacity onPress={() => setIsNotificationVisible(false)}>
+                  <Text style={{ fontSize: 18 }}>×</Text>
+                </TouchableOpacity>
+              </View>
+              {user ? (
+                <View style={{ flex: 1 }}>
+                  <NotificationsScreen 
+                    user={user}
+                    navigation={{
+                      navigate: () => {},
+                      goBack: () => {},
+                      addListener: () => () => {},
+                      isFocused: () => true,
+                      canGoBack: () => true,
+                      dispatch: () => {},
+                      reset: () => {},
+                      setParams: () => {},
+                      setOptions: () => {},
+                      getState: () => ({
+                        routes: [],
+                        index: 0,
+                        routeNames: [],
+                        type: 'stack',
+                        key: 'stack',
+                        stale: false
+                      } as any),
+                      getId: () => '1',
+                      getParent: () => undefined,
+                    }}
+                  />
+                </View>
+              ) : (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <Text>Please log in to view notifications</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </NavigationContainer>
-    </>
+    </NotificationProvider>
   );
 };
 

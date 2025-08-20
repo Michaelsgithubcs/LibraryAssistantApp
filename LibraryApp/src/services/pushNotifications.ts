@@ -1,23 +1,42 @@
-import PushNotification from 'react-native-push-notification';
+import PushNotification, { PushNotification as PN } from 'react-native-push-notification';
 import { Platform } from 'react-native';
+
+interface PushNotificationToken {
+  os: string;
+  token: string;
+}
+
+interface PushNotificationAction {
+  action: string;
+  userText?: string;
+}
+
+interface PushNotification {
+  foreground: boolean;
+  userInteraction: boolean;
+  message?: string;
+  data?: Record<string, any>;
+  action?: string;
+  userText?: string;
+}
 
 class PushNotificationService {
   configure() {
     PushNotification.configure({
-      onRegister: function (token) {
+      onRegister: function (token: PushNotificationToken) {
         console.log('TOKEN:', token);
       },
 
-      onNotification: function (notification) {
+      onNotification: function (notification: PushNotification) {
         console.log('NOTIFICATION:', notification);
       },
 
-      onAction: function (notification) {
+      onAction: function (notification: PushNotification & { action: string }) {
         console.log('ACTION:', notification.action);
         console.log('NOTIFICATION:', notification);
       },
 
-      onRegistrationError: function(err) {
+      onRegistrationError: function(err: Error) {
         console.error(err.message, err);
       },
 

@@ -196,7 +196,7 @@ def get_books():
                COUNT(br.rating) as rating_count
         FROM books b
         LEFT JOIN book_ratings br ON b.id = br.book_id
-        WHERE b.is_ebook = 0
+        WHERE 1=1
     '''
     params = []
     
@@ -1494,4 +1494,4 @@ def ai_book_assistant_v2():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5003)

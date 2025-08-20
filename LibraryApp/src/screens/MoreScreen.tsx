@@ -113,7 +113,10 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ user, navigation }) => {
               <Text style={styles.memberSince}>
                 Member since {user.created_at ? new Date(user.created_at).toLocaleDateString() : '2024'}
               </Text>
-              {console.log('User object:', user)}
+              {(() => {
+                console.log('User object:', user);
+                return null;
+              })()}
             </View>
           </View>
           

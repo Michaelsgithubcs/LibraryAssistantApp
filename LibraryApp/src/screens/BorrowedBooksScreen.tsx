@@ -133,7 +133,7 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
                   {reservation.status === 'pending' && (
                     <Button
                       title="Cancel Reservation"
-                      onPress={() => handleCancelReservation(reservation.id, reservation.book_title)}
+                      onPress={() => handleCancelReservation(Number(reservation.id), reservation.book_title)}
                       variant="outline"
                       style={{ marginTop: 8, paddingVertical: 6 }}
                     />

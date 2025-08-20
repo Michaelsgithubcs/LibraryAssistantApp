@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -96,7 +96,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     return responses[Math.floor(Math.random() * responses.length)];
   };
 
-  const sendMessage = async () => {
+  const sendMessage = (): void => {
     if (!inputText.trim()) return;
 
     const userMessage: Message = {
@@ -127,7 +127,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     }, 1500);
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date): string => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -141,8 +141,10 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
         style={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* DEBUG: Rendering messages, count: */}
-        {console.log('Rendering messages:', messages.length)}
+        {(() => {
+          console.log('Rendering messages:', messages.length);
+          return null;
+        })()}
         {messages.map((message, idx) => {
           // Use a single translateX per message for swipe
           const [translateX] = useState(new Animated.Value(0));
@@ -193,10 +195,10 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
                   }}
                   activeOpacity={0.85}
                 >
-                  <Card style={[
-                    styles.messageBubble,
-                    message.isUser ? styles.userBubble : styles.botBubble
-                  ]}>
+                  <Card style={{
+                    ...styles.messageBubble,
+                    ...(message.isUser ? styles.userBubble : styles.botBubble)
+                  }}>
                     {/* DEBUG: Message bubble rendered for message.id: */}
                     {console.log('Rendering Card for', message.id)}
                     {message.replyTo && (
@@ -238,7 +240,10 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
 
         {isTyping && (
           <View style={[styles.messageContainer, styles.botMessage]}>
-            <Card style={[styles.messageBubble, styles.botBubble]}>
+            <Card style={{
+              ...styles.messageBubble,
+              ...styles.botBubble
+            }}>
               <Text style={[commonStyles.textSecondary, styles.typingText]}>
                 Library Assistant is typing...
               </Text>
@@ -248,7 +253,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
       </ScrollView>
 
       <View style={styles.inputContainer}>
-        <Card style={styles.inputCard}>
+        <Card style={styles.inputCard as ViewStyle}>
           {replyingTo && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
               <View style={{ flex: 1 }}>
@@ -307,16 +312,20 @@ const styles = StyleSheet.create({
   
   messageBubble: {
     maxWidth: '80%',
-    margin: 0,
-  },
-  
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 4,
+  } as ViewStyle,
   userBubble: {
     backgroundColor: colors.primary,
-  },
-  
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+  } as ViewStyle,
   botBubble: {
     backgroundColor: colors.surface,
-  },
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
+  } as ViewStyle,
   
   userText: {
     color: colors.text.inverse,
@@ -348,7 +357,7 @@ const styles = StyleSheet.create({
   inputCard: {
     margin: 16,
     marginBottom: 8,
-  },
+  } as ViewStyle,
   
   inputRow: {
     flexDirection: 'row',
@@ -357,19 +366,18 @@ const styles = StyleSheet.create({
   },
   
   textInput: {
-    maxHeight: 100,
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 0,
     height: 40,
     minHeight: 40,
     maxHeight: 40,
-    paddingVertical: 0,
-  },
+  } as ViewStyle,
   
   sendButton: {
-    paddingHorizontal: 20,
-    marginBottom: 8,
     height: 40,
     minHeight: 40,
-    maxHeight: 40,
     paddingVertical: 0,
-  },
+  } as ViewStyle,
 });

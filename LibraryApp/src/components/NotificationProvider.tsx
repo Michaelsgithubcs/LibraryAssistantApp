@@ -2,13 +2,19 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import { View } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store';
-import { addNotification } from '../store/slices/notificationSlice';
+import { addNotification, markAsRead as markAsReadAction } from '../store/slices/notificationSlice';
 import NotificationCenter from './NotificationCenter';
 import NotificationService from '../services/NotificationService';
+
+import { Notification, NotificationBase } from '../store/slices/notificationSlice';
 
 interface NotificationContextType {
   showNotification: (title: string, message: string, data?: any) => void;
   showNotificationCenter: () => void;
+  notifications: Notification[];
+  markAsRead: (id: string) => void;
+  setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
+  unreadCount: number;
 }
 
 export const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -20,7 +26,18 @@ type NotificationProviderProps = {
 const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const [isNotificationVisible, setIsNotificationVisible] = useState(false);
   const dispatch = useDispatch();
-  const { unreadCount } = useSelector((state: RootState) => state.notifications);
+  const { notifications: reduxNotifications, unreadCount } = useSelector((state: RootState) => state.notifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // Sync with Redux
+  useEffect(() => {
+    setNotifications(reduxNotifications);
+  }, [reduxNotifications]);
+
+  const markAsRead = useCallback((id: string) => {
+    // This will update the Redux store via the notificationSlice
+    dispatch(markAsReadAction(id));
+  }, [dispatch]);
 
   // Show notification center
   const showNotificationCenter = useCallback(() => {
@@ -31,6 +48,7 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
   const showNotification = useCallback((title: string, message: string, data?: any) => {
     const notification = {
       id: Date.now().toString(),
+      type: data?.type || 'info',
       title,
       message,
       timestamp: new Date().toISOString(),
@@ -65,6 +83,10 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
   const contextValue = {
     showNotification,
     showNotificationCenter,
+    notifications,
+    markAsRead,
+    setNotifications,
+    unreadCount
   };
 
   return (

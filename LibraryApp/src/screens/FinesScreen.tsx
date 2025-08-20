@@ -210,14 +210,20 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
                         <Button
                           title="Pay Damage"
                           onPress={() => handlePayDamage(fine.id)}
-                          style={[styles.payButton, { backgroundColor: colors.success }]}
+                          style={{
+                            ...styles.payButton as object,
+                            backgroundColor: colors.success
+                          }}
                         />
                       )}
                       {fine.overdueFine > 0 && (
                         <Button
                           title={`Pay Overdue (R${fine.overdueFine.toFixed(2)})`}
                           onPress={() => handlePayOverdue(fine.id)}
-                          style={[styles.payButton, { backgroundColor: colors.warning }]}
+                          style={{
+                            ...styles.payButton as object,
+                            backgroundColor: colors.warning
+                          }}
                         />
                       )}
                     </>
@@ -226,7 +232,10 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
                     <Button
                       title="Pay Fine"
                       onPress={() => Alert.alert('Payment Info', 'The library only accepts cash payments')}
-                      style={[styles.payButton, { backgroundColor: colors.success }]}
+                      style={{
+                        ...styles.payButton as object,
+                        backgroundColor: colors.success
+                      }}
                     />
                   )}
                   {fine.damageFine === 0 && fine.overdueFine === 0 && (
@@ -234,7 +243,8 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
                       title="All Paid"
                       variant="outline"
                       disabled={true}
-                      style={styles.paidButton}
+                      onPress={() => {}}
+                      style={styles.paidButton as object}
                     />
                   )}
                 </View>
