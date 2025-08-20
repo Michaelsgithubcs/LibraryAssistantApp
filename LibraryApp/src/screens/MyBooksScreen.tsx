@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, FlatList, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
+import GridIcon from '../../assets/icons/grid.svg';
+import ListIcon from '../../assets/icons/list.svg';
 import { Input } from '../components/Input';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
@@ -23,6 +25,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isGridView, setIsGridView] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -138,86 +141,217 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
         <Text style={styles.headerTitle}>Books</Text>
       </View>
       
-      <ScrollView 
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-      {/* Search Interface */}
-      <Card>
-        <Text style={commonStyles.subtitle}>Search Library</Text>
-        <Input
-          placeholder="Search by title or author..."
-          value={searchTerm}
-          onChangeText={handleSearch}
-          style={styles.searchInput}
-        />
-        
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryContainer}>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.categoryChip,
-                selectedCategory === category && styles.activeCategoryChip
-              ]}
-              onPress={() => handleCategoryFilter(category)}
-            >
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category && styles.activeCategoryText
-              ]}>
-                {category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </Card>
+      <View style={styles.content}>
+        {/* Search Interface */}
+        <Card>
+          <Text style={[commonStyles.subtitle, {marginBottom: 8}]}>Search Library</Text>
+          <Input
+            placeholder="Search by title or author..."
+            value={searchTerm}
+            onChangeText={handleSearch}
+            style={{marginBottom: 16}}
+          />
+          
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={{marginTop: 8, marginBottom: 8}}
+          >
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: selectedCategory === category ? colors.primary : colors.surface,
+                  marginRight: 8,
+                  borderWidth: 1,
+                  borderColor: selectedCategory === category ? colors.primary : colors.border,
+                }}
+                onPress={() => handleCategoryFilter(category)}
+              >
+                <Text style={{
+                  fontSize: 14,
+                  color: selectedCategory === category ? colors.text.inverse : colors.text.secondary,
+                }}>
+                  {category}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </Card>
 
-      {/* Search Results */}
-      <Card>
-        <Text style={commonStyles.subtitle}>Available Books ({filteredBooks.length})</Text>
-        {filteredBooks.map((book) => {
-          const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
-          return (
-            <View key={book.id} style={styles.bookSearchItem}>
-              <View style={styles.bookInfo}>
-                <Text style={commonStyles.subtitle}>{book.title}</Text>
-                <Text style={commonStyles.textSecondary}>by {book.author}</Text>
-                <View style={styles.bookMeta}>
-                  <Badge text={book.category} variant="default" />
-                  <Text style={commonStyles.textMuted}>
-                    {book.availableCopies}/{book.totalCopies} available
-                  </Text>
-                </View>
-                {book.description && (
-                  <Text style={[
-                    commonStyles.textMuted, 
-                    styles.description
-                  ]} numberOfLines={2}>
-                    {book.description}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.bookActions}>
-                <Button
-                  title={bookStatus.text}
-                  onPress={() => handleReserve(book.id, book.title)}
-                  disabled={bookStatus.disabled}
-                  variant={bookStatus.disabled ? 'outline' : 'primary'}
-                  style={styles.reserveButton}
-                />
-              </View>
+        <Card>
+          <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
+            <Text style={[commonStyles.subtitle, {flex: 1}]}>Available Books ({filteredBooks.length})</Text>
+            <View style={{flexDirection: 'row', backgroundColor: colors.background, borderRadius: 8, padding: 2, borderWidth: 1, borderColor: colors.border}}>
+              <TouchableOpacity 
+                onPress={() => setIsGridView(false)}
+                style={{
+                  padding: 8,
+                  borderRadius: 6,
+                  marginHorizontal: 2,
+                  backgroundColor: !isGridView ? '#f0f0f0' : 'transparent'
+                }}
+              >
+                <ListIcon width={20} height={20} fill={!isGridView ? colors.primary : colors.text.secondary} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setIsGridView(true)}
+                style={{
+                  padding: 8,
+                  borderRadius: 6,
+                  marginHorizontal: 2,
+                  backgroundColor: isGridView ? '#f0f0f0' : 'transparent'
+                }}
+              >
+                <GridIcon width={20} height={20} fill={isGridView ? colors.primary : colors.text.secondary} />
+              </TouchableOpacity>
             </View>
-          );
-        })}
-        
-        {filteredBooks.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={commonStyles.textSecondary}>No books found matching your search</Text>
           </View>
+          {isGridView ? (
+            <View style={{flex: 1, height: '100%'}}>
+              <FlatList
+                data={filteredBooks}
+                numColumns={2}
+                key="grid"
+                keyExtractor={(item: Book) => item.id}
+                columnWrapperStyle={{justifyContent: 'space-between'}}
+                contentContainerStyle={{paddingBottom: 20}}
+              renderItem={({ item: book }) => {
+                const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
+                return (
+                  <View style={{width: '48%', marginBottom: 16}}>
+                    <View style={{
+                      backgroundColor: colors.surface,
+                      borderRadius: 8,
+                      padding: 12,
+                      height: '100%',
+                      justifyContent: 'space-between',
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}>
+                      <View style={{marginBottom: 12}}>
+                        <Text style={{
+                          fontSize: 16,
+                          fontWeight: '600',
+                          color: colors.text.primary,
+                          marginBottom: 4,
+                        }} numberOfLines={2}>{book.title}</Text>
+                        <Text style={{
+                          fontSize: 12,
+                          color: colors.text.secondary,
+                          marginBottom: 8,
+                        }} numberOfLines={1}>by {book.author}</Text>
+                        <View style={{flexDirection: 'column', gap: 4}}>
+                          <Text style={{
+                            fontSize: 12,
+                            color: colors.primary,
+                            backgroundColor: `${colors.primary}20`,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 4,
+                            alignSelf: 'flex-start',
+                          }}>{book.category}</Text>
+                          <Text style={{
+                            fontSize: 12,
+                            color: colors.text.secondary,
+                          }}>{book.availableCopies}/{book.totalCopies} available</Text>
+                        </View>
+                      </View>
+                      <Button
+                        title={bookStatus.text}
+                        onPress={() => handleReserve(book.id, book.title)}
+                        disabled={bookStatus.disabled}
+                        variant={bookStatus.disabled ? 'outline' : 'primary'}
+                        style={{
+                          width: '100%',
+                          paddingVertical: 6,
+                        }}
+                      />
+                    </View>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={{alignItems: 'center', paddingVertical: 32}}>
+                  <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
+                </View>
+              }
+              refreshControl={
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={onRefresh} 
+                />
+              }
+            />
+          </View>
+          ) : (
+            <FlatList
+              data={filteredBooks}
+              key="list"
+              keyExtractor={(item: Book) => item.id}
+{{ ... }}
+              renderItem={({ item: book }) => {
+                const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
+                return (
+                  <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    paddingVertical: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}>
+                    <View style={{flex: 1, marginRight: 16}}>
+                      <Text style={commonStyles.subtitle}>{book.title}</Text>
+                      <Text style={commonStyles.textSecondary}>by {book.author}</Text>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        marginVertical: 8,
+                      }}>
+                        <Badge text={book.category} variant="default" />
+                        <Text style={commonStyles.textMuted}>
+                          {book.availableCopies}/{book.totalCopies} available
+                        </Text>
+                      </View>
+                      {book.description && (
+                        <Text style={[commonStyles.textMuted, {marginTop: 8, color: colors.text.muted}]} numberOfLines={2}>
+                          {book.description}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{justifyContent: 'center'}}>
+                      <Button
+                        title={bookStatus.text}
+                        onPress={() => handleReserve(book.id, book.title)}
+                        disabled={bookStatus.disabled}
+                        variant={bookStatus.disabled ? 'outline' : 'primary'}
+                        style={{
+                          minWidth: 80,
+                        }}
+                      />
+                    </View>
+                  </View>
+                );
+              }}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
+              </View>
+            }
+            refreshControl={
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh} 
+              />
+            }
+          />
         )}
       </Card>
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -227,102 +361,161 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  
   header: {
     backgroundColor: colors.primary,
     paddingTop: 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
-  
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.text.inverse,
+    color: '#ffffff',
   },
-  
   content: {
     flex: 1,
+    padding: 16,
   },
   searchInput: {
     marginBottom: 16,
   },
-  
   categoryContainer: {
+    marginTop: 8,
     marginBottom: 8,
   },
-  
   categoryChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginRight: 8,
+    borderRadius: 20,
     backgroundColor: colors.surface,
+    marginRight: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 20,
   },
-  
   activeCategoryChip: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  
   categoryText: {
     fontSize: 14,
     color: colors.text.secondary,
   },
-  
   activeCategoryText: {
     color: colors.text.inverse,
   },
-  
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleButton: {
+    padding: 8,
+    borderRadius: 6,
+    marginHorizontal: 2,
+  },
+  activeToggle: {
+    backgroundColor: '#f0f0f0',
+  },
   bookSearchItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  gridItem: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  gridCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 12,
+    height: '100%',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  gridBookInfo: {
+    marginBottom: 12,
+  },
+  gridTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  gridAuthor: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginBottom: 8,
+  },
+  gridMeta: {
+    flexDirection: 'column',
+    gap: 4,
+  },
+  gridCategory: {
+    fontSize: 12,
+    color: colors.primary,
+    backgroundColor: `${colors.primary}20`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  gridAvailability: {
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  gridButton: {
+    width: '100%',
+    paddingVertical: 6,
+  },
   bookInfo: {
     flex: 1,
     marginRight: 16,
   },
-  
   bookMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginVertical: 8,
   },
-  
   description: {
     marginTop: 8,
+    color: colors.text.muted,
   },
-  
   bookActions: {
     justifyContent: 'center',
   },
-  
   reserveButton: {
     minWidth: 80,
   },
-  
   emptyState: {
     alignItems: 'center',
     paddingVertical: 32,
   },
-  
   reservationItem: {
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  
   reservedBook: {
     opacity: 0.6,
     backgroundColor: colors.background,
   },
-  
   reservedText: {
     color: colors.text.muted,
   },

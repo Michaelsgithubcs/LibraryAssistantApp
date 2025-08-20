@@ -9,6 +9,7 @@ import OverdueIcon from '../../assets/icons/notifications icons/overdue-notifica
 import FineIcon from '../../assets/icons/notifications icons/fines-notifications.svg';
 import ReturnedIcon from '../../assets/icons/notifications icons/return-notification.svg';
 import NewBookIcon from '../../assets/icons/notifications icons/bookadded-notification.svg';
+import AllCaughtUpIcon from '../../assets/icons/notifications icons/allcoughtup.svg';
 import { ModernCard } from '../components/ModernCard';
 import { Button } from '../components/Button';
 import { colors } from '../styles/colors';
@@ -316,7 +317,9 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         ) : (
           <ModernCard variant="elevated">
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🔔</Text>
+              <View style={styles.emptyIconContainer}>
+                <AllCaughtUpIcon width={64} height={64} />
+              </View>
               <Text style={styles.emptyTitle}>All Caught Up!</Text>
               <Text style={styles.emptyMessage}>
                 You have no new notifications. We'll notify you about reservations, due dates, fines, and new books.
@@ -437,14 +440,18 @@ const styles = StyleSheet.create({
   },
   
   emptyState: {
+    padding: 20,
     alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 20,
+    justifyContent: 'center',
   },
-  
+  emptyIconContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyIcon: {
-    fontSize: 64,
-    marginBottom: 20,
+    fontSize: 48,
+    marginBottom: 16,
   },
   
   emptyTitle: {
