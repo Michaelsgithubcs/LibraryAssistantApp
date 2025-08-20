@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+backend/.venv/
+LibraryApp/android/app/build/outputs/apk/debug/app-debug.apk
