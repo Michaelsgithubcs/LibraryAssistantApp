@@ -1,11 +1,25 @@
 {
-  "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "types": ["react", "react-native"],
     "baseUrl": ".",
     "paths": {
-      "*.svg": ["./svg"],
       "@/*": ["src/*"]
-    }
-  }
+    },
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "strict": true,
+    "target": "esnext",
+    "types": ["react", "react-native"],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "commonjs",
+    "lib": ["es2017"],
+    "jsx": "react-native"
+  },
+  "exclude": ["node_modules"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ]
 }

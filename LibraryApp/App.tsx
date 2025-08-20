@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar, Text, View } from 'react-native';
+import { StatusBar, Text, View, TouchableOpacity } from 'react-native';
 import HomeIcon from './assets/icons/home.svg';
 import HomeIconFilled from './assets/icons/home-clicked.svg';
 import BooksIcon from './assets/icons/book.svg';
@@ -14,8 +14,16 @@ import BellIconFilled from './assets/icons/notifications-clicked.svg';
 import MoreIcon from './assets/icons/more.svg';
 import MoreIconFilled from './assets/icons/more-clicked.svg';
 
+import { Provider } from 'react-redux';
+import { store } from './src/store';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
+import NotificationCenter from './src/components/NotificationCenter';
+
+// Define LoginScreen props type
+interface LoginScreenProps {
+  onLogin: (user: any) => void;  // Matches the LoginScreen implementation
+}
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { MyBooksScreen } from './src/screens/MyBooksScreen';
 import { NotificationsScreen } from './src/screens/NotificationsScreen';
@@ -28,12 +36,52 @@ import { OverdueBooksScreen } from './src/screens/OverdueBooksScreen';
 import { BorrowedBooksScreen } from './src/screens/BorrowedBooksScreen';
 
 import { colors } from './src/styles/colors';
-import { NotificationProvider } from './src/context/NotificationContext';
+import { useDispatch, useSelector } from 'react-redux';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-import { useNotificationContext } from './src/context/NotificationContext';
+// Notification header button component
+const NotificationHeaderButton = ({ onPress }: { onPress: () => void }) => {
+  // For now, we'll use a placeholder for the badge count
+  const unreadCount = 0;
+  
+  return (
+    <TouchableOpacity 
+      onPress={onPress}
+      style={{
+        marginRight: 16,
+        position: 'relative',
+        padding: 4,
+      }}
+    >
+      {unreadCount > 0 ? (
+        <BellIconFilled width={24} height={24} />
+      ) : (
+        <BellIcon width={24} height={24} />
+      )}
+      {unreadCount > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            right: -4,
+            top: -4,
+            backgroundColor: '#FF3B30',
+            borderRadius: 8,
+            width: 16,
+            height: 16,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const TabNavigator = ({ user }: { user: any }) => {
   const DashboardComponent = React.useCallback((props: any) => <DashboardScreen {...props} user={user} />, [user]);
@@ -241,32 +289,64 @@ const MainNavigator = ({ user }: { user: any }) => {
   );
 };
 
-const App = () => {
-  const { user, loading, login } = useAuth();
+const AppContent = () => {
+  const { user, loading } = useAuth();
+  const [isNotificationVisible, setIsNotificationVisible] = React.useState(false);
 
   if (loading) {
-    return null;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
   }
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      {user ? (
-        <NotificationProvider user={user}>
-          <NavigationContainer>
-            <MainNavigator user={user} />
-          </NavigationContainer>
-        </NotificationProvider>
-      ) : (
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <NavigationContainer>
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <Stack.Screen 
+              name="Main" 
+              children={() => <MainNavigator user={user} />}
+              options={{
+                headerShown: true,
+                title: 'Library',
+                headerRight: () => (
+                  <NotificationHeaderButton onPress={() => setIsNotificationVisible(true)} />
+                ),
+              }}
+            />
+          ) : (
             <Stack.Screen name="Login">
-              {(props) => <LoginScreen {...props} onLogin={login} />}
-            </Stack.Screen>
-          </Stack.Navigator>
-        </NavigationContainer>
-      )}
+            {() => (
+              <LoginScreen 
+                onLogin={(user) => {
+                  // Handle login logic here
+                  console.log('Login attempt with user:', user);
+                }} 
+              />
+            )}
+          </Stack.Screen>
+          )}
+        </Stack.Navigator>
+        
+        {/* Notification Center */}
+        <NotificationCenter 
+          isVisible={isNotificationVisible} 
+          onClose={() => setIsNotificationVisible(false)} 
+        />
+      </NavigationContainer>
     </>
+  );
+};
+
+const App = () => {
+  return (
+    <Provider store={store}>
+      <AppContent />
+    </Provider>
   );
 };
 
