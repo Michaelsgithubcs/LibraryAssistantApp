@@ -56,41 +56,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Update reservations
       setUserReservations(reservations);
 
-      // Fetch recommendations from the API
-      try {
-        const recommendations = await apiClient.getRecommendations(user.id, 'hybrid', 3);
-        if (recommendations && recommendations.length > 0) {
-          const validRecommendations: Book[] = recommendations.map(book => {
-            const recommendationType = (book.recommendation_type || 'popular') as 
-              'content_based' | 'association_rules' | 'hybrid' | 'popular' | 'general';
-              
-            return {
-              ...book,
-              isbn: book.isbn || '',
-              description: book.description || '',
-              availableCopies: book.availableCopies || 0,
-              totalCopies: book.totalCopies || 1,
-              publishDate: book.publishDate || new Date().toISOString().split('T')[0],
-              avg_rating: book.avg_rating || 0,
-              rating_count: book.rating_count || 0,
-              rating: book.rating || 0,
-              estimatedTime: book.estimatedTime || 0,
-              coverImage: book.cover_image || 'https://via.placeholder.com/150',
-              reading_time_minutes: book.reading_time_minutes || 0,
-              recommendationType: recommendationType,
-              recommendationScore: book.score || 0
-            };
-          });
-          setRecommendedBooks(validRecommendations);
-          return; // Exit early if we got recommendations
-        }
-      } catch (error) {
-        console.error('Error fetching recommendations:', error);
-      }
-
-      // Fallback to random books if no recommendations
+      // Get all books for fallback recommendations
       const allBooks = await apiClient.getBooks();
+      
+      // Update recommended books with fallback
       if (allBooks && allBooks.length > 0) {
+        // Get 3 random books as recommendations
         const shuffled = [...allBooks].sort(() => 0.5 - Math.random());
         const validRecommendations: Book[] = shuffled.slice(0, 3).map(book => ({
           ...book,
@@ -104,8 +75,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
           rating: book.rating || 0,
           estimatedTime: book.estimatedTime || 0,
           coverImage: book.coverImage || 'https://via.placeholder.com/150',
-          reading_time_minutes: book.reading_time_minutes || 0,
-          recommendationType: 'popular' // Mark as popular fallback
+          reading_time_minutes: book.reading_time_minutes || 0
         }));
         setRecommendedBooks(validRecommendations);
       } else {
@@ -232,10 +202,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       r.status === 'pending' && r.book_title === bookTitle
     );
     
-    // Convert both IDs to strings for consistent comparison
-    const bookIdStr = String(bookId);
     const isIssued = userBooks.some(b => 
-      String(b.book_id) === bookIdStr ||
+      b.book_id === parseInt(bookId) ||
+      String(b.book_id) === bookId ||
       b.title === bookTitle
     );
     

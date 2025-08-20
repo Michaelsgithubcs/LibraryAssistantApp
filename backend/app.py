@@ -3,16 +3,11 @@ from flask_cors import CORS
 import sqlite3
 import os
 import sys
-import logging
 from datetime import datetime, timedelta
 import hashlib
 import secrets
 import google.generativeai as genai
 from recommendation_service import RecommendationService
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -1385,68 +1380,23 @@ def get_recommendations(user_id):
     try:
         # Get recommendation type from query params (default: hybrid)
         rec_type = request.args.get('type', 'hybrid')
-        limit = min(int(request.args.get('limit', '10')), 20)  # Max 20 recommendations
-        use_bert = request.args.get('use_bert', 'true').lower() == 'true'
+        limit = int(request.args.get('limit', '5'))
         
-        # Get recommendations based on type
-        if rec_type == 'content':
-            book_ids = recommendation_service.content_based_filtering(
-                user_id, limit, use_bert=use_bert
-            )
-            rec_type_name = 'content_based'
-        elif rec_type == 'association':
-            book_ids = recommendation_service.get_association_recommendations(
-                user_id, limit
-            )
-            rec_type_name = 'association_rules'
-        elif rec_type == 'popular':
-            book_ids = recommendation_service.get_popular_recommendations(
-                user_id, limit
-            )
-            rec_type_name = 'popular'
-        else:  # hybrid (default)
-            # Use the hybrid recommendation that combines all methods
-            recommendations = recommendation_service.hybrid_recommendation(
-                user_id, limit, use_bert=use_bert
-            )
-            return jsonify({
-                'success': True,
-                'recommendations': recommendations,
-                'type': 'hybrid',
-                'count': len(recommendations)
-            })
-        
-        # For non-hybrid recommendations, get book details
-        conn = sqlite3.connect(DATABASE)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        placeholders = ','.join(['?'] * len(book_ids))
-        cursor.execute(f'''
-            SELECT id, title, author, category, 
-                   COALESCE(description, '') as description,
-                   COALESCE(cover_image, '') as cover_image, 
-                   available_copies
-            FROM books 
-            WHERE id IN ({placeholders})
-            ORDER BY CASE id {' '.join([f'WHEN {bid} THEN {i}' for i, bid in enumerate(book_ids)])} END
-        ''', book_ids)
-        
-        recommendations = [dict(book) for book in cursor.fetchall()]
-        
-        # Add recommendation type to each book
-        for book in recommendations:
-            book['recommendation_type'] = rec_type_name
+        if rec_type == 'collaborative':
+            recommendations = recommendation_service.collaborative_filtering(user_id, limit)
+        elif rec_type == 'content':
+            recommendations = recommendation_service.content_based_filtering(user_id, limit)
+        else:  # hybrid
+            recommendations = recommendation_service.hybrid_recommendation(user_id, limit)
         
         return jsonify({
             'success': True,
             'recommendations': recommendations,
-            'type': rec_type_name,
-            'count': len(recommendations)
+            'type': rec_type
         })
         
     except Exception as e:
-        logger.error(f"Error in get_recommendations: {str(e)}", exc_info=True)
+        print(f"Error in get_recommendations: {str(e)}", file=sys.stderr)
         return jsonify({
             'success': False,
             'error': 'Failed to generate recommendations',

@@ -21,15 +21,6 @@ export interface Book {
   estimatedTime?: number;
   coverImage?: string;
   reading_time_minutes?: number;
-  
-  // Recommendation related fields
-  recommendationType?: 'content_based' | 'association_rules' | 'hybrid' | 'popular' | 'general';
-  recommendationScore?: number;
-  
-  // Backend response fields (snake_case)
-  cover_image?: string;
-  recommendation_type?: string;
-  score?: number; // Recommendation score from the backend
 }
 
 export interface IssuedBook {
