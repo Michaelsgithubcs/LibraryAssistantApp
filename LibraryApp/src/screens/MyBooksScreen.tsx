@@ -182,82 +182,147 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
           </ScrollView>
         </Card>
 
-        <Card>
-          <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
-            <Text style={[commonStyles.subtitle, {flex: 1}]}>Available Books ({filteredBooks.length})</Text>
-            <View style={{flexDirection: 'row', backgroundColor: colors.background, borderRadius: 8, padding: 2, borderWidth: 1, borderColor: colors.border}}>
-              <TouchableOpacity 
-                onPress={() => setIsGridView(false)}
-                style={{
-                  padding: 8,
-                  borderRadius: 6,
-                  marginHorizontal: 2,
-                  backgroundColor: !isGridView ? '#f0f0f0' : 'transparent'
-                }}
-              >
-                <ListIcon width={20} height={20} fill={!isGridView ? colors.primary : colors.text.secondary} />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => setIsGridView(true)}
-                style={{
-                  padding: 8,
-                  borderRadius: 6,
-                  marginHorizontal: 2,
-                  backgroundColor: isGridView ? '#f0f0f0' : 'transparent'
-                }}
-              >
-                <GridIcon width={20} height={20} fill={isGridView ? colors.primary : colors.text.secondary} />
-              </TouchableOpacity>
+        <View style={{flex: 1}}>
+          <Card style={{flex: 1}}>
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
+              <Text style={[commonStyles.subtitle, {flex: 1}]}>Available Books ({filteredBooks.length})</Text>
+              <View style={{flexDirection: 'row', backgroundColor: colors.background, borderRadius: 8, padding: 2, borderWidth: 1, borderColor: colors.border}}>
+                <TouchableOpacity 
+                  onPress={() => setIsGridView(false)}
+                  style={{
+                    padding: 8,
+                    borderRadius: 6,
+                    marginHorizontal: 2,
+                    backgroundColor: !isGridView ? '#f0f0f0' : 'transparent'
+                  }}
+                >
+                  <ListIcon width={20} height={20} fill={!isGridView ? colors.primary : colors.text.secondary} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setIsGridView(true)}
+                  style={{
+                    padding: 8,
+                    borderRadius: 6,
+                    marginHorizontal: 2,
+                    backgroundColor: isGridView ? '#f0f0f0' : 'transparent'
+                  }}
+                >
+                  <GridIcon width={20} height={20} fill={isGridView ? colors.primary : colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-          {isGridView ? (
-            <View style={{flex: 1, height: '100%'}}>
-              <FlatList
-                data={filteredBooks}
-                numColumns={2}
-                key="grid"
-                keyExtractor={(item: Book) => item.id}
-                columnWrapperStyle={{justifyContent: 'space-between'}}
-                contentContainerStyle={{paddingBottom: 20}}
-              renderItem={({ item: book }) => {
-                const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
-                return (
-                  <View style={{width: '48%', marginBottom: 16}}>
-                    <View style={{
-                      backgroundColor: colors.surface,
-                      borderRadius: 8,
-                      padding: 12,
-                      height: '100%',
-                      justifyContent: 'space-between',
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}>
-                      <View style={{marginBottom: 12}}>
-                        <Text style={{
-                          fontSize: 16,
-                          fontWeight: '600',
-                          color: colors.text.primary,
-                          marginBottom: 4,
-                        }} numberOfLines={2}>{book.title}</Text>
-                        <Text style={{
-                          fontSize: 12,
-                          color: colors.text.secondary,
-                          marginBottom: 8,
-                        }} numberOfLines={1}>by {book.author}</Text>
-                        <View style={{flexDirection: 'column', gap: 4}}>
+            
+            {isGridView ? (
+              <View style={{flex: 1, paddingBottom: 20}}>
+                <FlatList
+                  data={filteredBooks}
+                  numColumns={2}
+                  key="grid"
+                  keyExtractor={(item: Book) => item.id}
+                  columnWrapperStyle={{justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 8}}
+                  contentContainerStyle={{paddingBottom: 20}}
+                  style={{flex: 1}}
+                  showsVerticalScrollIndicator={true}
+                  renderItem={({ item: book }) => {
+                    const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
+                    return (
+                      <View style={{width: '48%', marginBottom: 16, height: 240}}>
+                      <View style={{
+                        flex: 1,
+                        backgroundColor: colors.surface,
+                        borderRadius: 8,
+                        padding: 12,
+                        justifyContent: 'space-between',
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        height: '100%',
+                        maxHeight: 240,
+                        overflow: 'hidden'
+                      }}>
+                        <View style={{marginBottom: 12}}>
                           <Text style={{
-                            fontSize: 12,
-                            color: colors.primary,
-                            backgroundColor: `${colors.primary}20`,
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 4,
-                            alignSelf: 'flex-start',
-                          }}>{book.category}</Text>
+                            fontSize: 16,
+                            fontWeight: '600',
+                            color: colors.text.primary,
+                            marginBottom: 4,
+                          }} numberOfLines={2}>{book.title}</Text>
                           <Text style={{
                             fontSize: 12,
                             color: colors.text.secondary,
-                          }}>{book.availableCopies}/{book.totalCopies} available</Text>
+                            marginBottom: 8,
+                          }} numberOfLines={1}>by {book.author}</Text>
+                          <View style={{flexDirection: 'column', gap: 4}}>
+                            <Text style={{
+                              fontSize: 12,
+                              color: colors.primary,
+                              backgroundColor: `${colors.primary}20`,
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                              alignSelf: 'flex-start',
+                            }}>{book.category}</Text>
+                            <Text style={{
+                              fontSize: 12,
+                              color: colors.text.secondary,
+                            }}>{book.availableCopies}/{book.totalCopies} available</Text>
+                          </View>
+                        </View>
+                        <Button
+                          title={bookStatus.text}
+                          onPress={() => handleReserve(book.id, book.title)}
+                          disabled={bookStatus.disabled}
+                          variant={bookStatus.disabled ? 'outline' : 'primary'}
+                          style={{
+                            width: '100%',
+                            paddingVertical: 6,
+                          }}
+                        />
+                      </View>
+                    </View>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={{flex: 1, alignItems: 'center', paddingVertical: 32, width: '100%'}}>
+                    <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
+                  </View>
+                }
+                refreshControl={
+                  <RefreshControl 
+                    refreshing={refreshing} 
+                    onRefresh={onRefresh} 
+                  />
+                }
+              />
+            </View>
+          ) : (
+              <FlatList
+                data={filteredBooks}
+                key="list"
+                keyExtractor={(item: Book) => item.id}
+                style={{flex: 1}}
+                contentContainerStyle={{paddingBottom: 20}}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item: book }) => {
+                  const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
+                  return (
+                    <View style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      paddingVertical: 16,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                    }}>
+                      <View style={{flex: 1, marginRight: 16}}>
+                        <Text style={commonStyles.subtitle}>{book.title}</Text>
+                        <Text style={commonStyles.textSecondary}>by {book.author}</Text>
+                        <View style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                          marginVertical: 8,
+                        }}>
+                          <Text style={[commonStyles.textSecondary, {fontSize: 12}]}>{book.category}</Text>
+                          <Text style={[commonStyles.textSecondary, {fontSize: 12}]}>{book.availableCopies} available</Text>
                         </View>
                       </View>
                       <Button
@@ -265,92 +330,26 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                         onPress={() => handleReserve(book.id, book.title)}
                         disabled={bookStatus.disabled}
                         variant={bookStatus.disabled ? 'outline' : 'primary'}
-                        style={{
-                          width: '100%',
-                          paddingVertical: 6,
-                        }}
+                        style={{minWidth: 100}}
                       />
                     </View>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={{alignItems: 'center', paddingVertical: 32}}>
+                    <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
                   </View>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={{alignItems: 'center', paddingVertical: 32}}>
-                  <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
-                </View>
-              }
-              refreshControl={
-                <RefreshControl 
-                  refreshing={refreshing} 
-                  onRefresh={onRefresh} 
-                />
-              }
-            />
-          </View>
-          ) : (
-            <FlatList
-              data={filteredBooks}
-              key="list"
-              keyExtractor={(item: Book) => item.id}
-{{ ... }}
-              renderItem={({ item: book }) => {
-                const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
-                return (
-                  <View style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    paddingVertical: 16,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                  }}>
-                    <View style={{flex: 1, marginRight: 16}}>
-                      <Text style={commonStyles.subtitle}>{book.title}</Text>
-                      <Text style={commonStyles.textSecondary}>by {book.author}</Text>
-                      <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                        marginVertical: 8,
-                      }}>
-                        <Badge text={book.category} variant="default" />
-                        <Text style={commonStyles.textMuted}>
-                          {book.availableCopies}/{book.totalCopies} available
-                        </Text>
-                      </View>
-                      {book.description && (
-                        <Text style={[commonStyles.textMuted, {marginTop: 8, color: colors.text.muted}]} numberOfLines={2}>
-                          {book.description}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={{justifyContent: 'center'}}>
-                      <Button
-                        title={bookStatus.text}
-                        onPress={() => handleReserve(book.id, book.title)}
-                        disabled={bookStatus.disabled}
-                        variant={bookStatus.disabled ? 'outline' : 'primary'}
-                        style={{
-                          minWidth: 80,
-                        }}
-                      />
-                    </View>
-                  </View>
-                );
-              }}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={[commonStyles.text, {color: colors.text.secondary}]}>No books found matching your search</Text>
-              </View>
-            }
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={onRefresh} 
+                }
+                refreshControl={
+                  <RefreshControl 
+                    refreshing={refreshing} 
+                    onRefresh={onRefresh} 
+                  />
+                }
               />
-            }
-          />
-        )}
-      </Card>
+            )}
+          </Card>
+        </View>
       </View>
     </View>
   );
