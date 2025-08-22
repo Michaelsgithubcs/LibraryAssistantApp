@@ -235,12 +235,12 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                   renderItem={({ item: book }) => {
                     const bookStatus = getBookStatus(book.id, book.title, book.availableCopies);
                     return (
-                      <View style={{width: '48%', marginBottom: 16, height: 240}}>
+                      <View style={{width: '48%', marginBottom: 12, height: 220}}>
                       <View style={{
                         flex: 1,
                         backgroundColor: colors.surface,
                         borderRadius: 8,
-                        padding: 12,
+                        padding: 10,
                         justifyContent: 'space-between',
                         borderWidth: 1,
                         borderColor: colors.border,
@@ -250,28 +250,28 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                       }}>
                         <View style={{marginBottom: 12}}>
                           <Text style={{
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: '600',
                             color: colors.text.primary,
                             marginBottom: 4,
                           }} numberOfLines={2}>{book.title}</Text>
                           <Text style={{
-                            fontSize: 12,
+                            fontSize: 11,
                             color: colors.text.secondary,
                             marginBottom: 8,
                           }} numberOfLines={1}>by {book.author}</Text>
                           <View style={{flexDirection: 'column', gap: 4}}>
                             <Text style={{
-                              fontSize: 12,
+                              fontSize: 11,
                               color: colors.primary,
                               backgroundColor: `${colors.primary}20`,
                               paddingHorizontal: 8,
-                              paddingVertical: 2,
+                              paddingVertical: 1,
                               borderRadius: 4,
                               alignSelf: 'flex-start',
                             }}>{book.category}</Text>
                             <Text style={{
-                              fontSize: 12,
+                              fontSize: 11,
                               color: colors.text.secondary,
                             }}>{book.availableCopies}/{book.totalCopies} available</Text>
                           </View>
@@ -283,7 +283,9 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                           variant={bookStatus.disabled ? 'outline' : 'primary'}
                           style={{
                             width: '100%',
-                            paddingVertical: 6,
+                            paddingVertical: 4,
+                            height: 30,
+                            marginTop: 8,
                           }}
                         />
                       </View>
@@ -317,8 +319,8 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                     <View style={{
                       flexDirection: 'row',
                       justifyContent: 'space-between',
-                      paddingVertical: 16,
-                      borderBottomWidth: 1,
+                      paddingVertical: 10,
+                      borderBottomWidth: StyleSheet.hairlineWidth,
                       borderBottomColor: colors.border,
                     }}>
                       <View style={{flex: 1, marginRight: 16}}>
@@ -327,11 +329,11 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                         <View style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 12,
-                          marginVertical: 8,
+                          gap: 8,
+                          marginTop: 4,
                         }}>
-                          <Text style={[commonStyles.textSecondary, {fontSize: 12}]}>{book.category}</Text>
-                          <Text style={[commonStyles.textSecondary, {fontSize: 12}]}>{book.availableCopies} available</Text>
+                          <Text style={[commonStyles.textSecondary, {fontSize: 11}]}>{book.category}</Text>
+                          <Text style={[commonStyles.textSecondary, {fontSize: 11}]}>{book.availableCopies} available</Text>
                         </View>
                       </View>
                       <Button
@@ -339,7 +341,14 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
                         onPress={() => handleReserve(book.id, book.title)}
                         disabled={bookStatus.disabled}
                         variant={bookStatus.disabled ? 'outline' : 'primary'}
-                        style={{minWidth: 100}}
+                        style={{
+                          minWidth: 80,
+                          paddingVertical: 4,
+                          paddingHorizontal: 8,
+                          height: 32,
+                          marginLeft: 8
+                        }}
+                        textStyle={{ fontSize: 12 }}
                       />
                     </View>
                   );
