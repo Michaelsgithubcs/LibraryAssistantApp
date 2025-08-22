@@ -733,13 +733,34 @@ def issue_book(book_id):
         VALUES (?, ?, ?, ?, 'issued', ?)
     ''', (book_id, user_id, issue_date, due_date, overdue_fee))
     
+    # Get the inserted issue ID
+    issue_id = cursor.lastrowid
+    
     # Update available copies
     cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
     
-    conn.commit()
-    conn.close()
+    # Get book details
+    cursor.execute('SELECT title, author FROM books WHERE id = ?', (book_id,))
+    book = cursor.fetchone()
     
-    return jsonify({'message': 'Book issued successfully'})
+    conn.commit()
+    
+    # Return the issued book details
+    issued_book = {
+        'id': issue_id,
+        'book_id': book_id,
+        'title': book[0],
+        'author': book[1],
+        'issue_date': issue_date.strftime('%Y-%m-%d'),
+        'due_date': due_date.strftime('%Y-%m-%d'),
+        'status': 'issued',
+        'fine_amount': 0.0,
+        'reading_time_minutes': 180,  # Default reading time
+        'reading_progress': 0         # Initial progress
+    }
+    
+    conn.close()
+    return jsonify(issued_book)
 
 @app.route('/api/admin/issued-books', methods=['GET'])
 def get_issued_books():

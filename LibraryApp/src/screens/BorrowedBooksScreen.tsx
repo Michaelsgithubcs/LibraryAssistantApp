@@ -22,8 +22,17 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initial fetch
     fetchData();
-  }, []);
+    
+    // Refresh when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchData();
+    });
+    
+    // Cleanup the listener on unmount
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchData = async () => {
     try {

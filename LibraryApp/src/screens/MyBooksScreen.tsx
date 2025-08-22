@@ -28,8 +28,17 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
   const [isGridView, setIsGridView] = useState(false);
 
   useEffect(() => {
+    // Initial fetch
     fetchData();
-  }, []);
+    
+    // Refresh when screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchData();
+    });
+    
+    // Cleanup the listener on unmount
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchData = async () => {
     try {
