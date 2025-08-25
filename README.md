@@ -32,9 +32,9 @@ A modern, AI-powered library management solution that transforms traditional lib
 - **Financial Management**: Handle fines, payments, and financial reporting
 - **Circulation Desk**: Streamlined check-in/check-out system with barcode support
 - **Advanced Analytics**: Gain insights into library usage, popular titles, and user engagement
-  ### Admin view screenshots
-  <img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 20" src="https://github.com/user-attachments/assets/c66c64f5-97be-4cff-a64a-77e530ee4a83" />
-<img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 30" src="https://github.com/user-attachments/assets/435644f4-3e9a-4184-b4bc-c429513c5d72" />
+    ### Admin view screenshots
+    <img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 20" src="https://github.com/user-attachments/assets/c66c64f5-97be-4cff-a64a-77e530ee4a83" />
+    <img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 30" src="https://github.com/user-attachments/assets/435644f4-3e9a-4184-b4bc-c429513c5d72" />
 
 
 ## 🛠 Technology Stack
