@@ -12,9 +12,9 @@ A modern, AI-powered library management solution that transforms traditional lib
 - **Community Engagement**: Rate books, write reviews, and see what others are reading
 
   ### user screenshots
-     <img width="1280" height="2856" alt="Screenshot_1756112657" src="https://github.com/user-attachments/assets/3e22da45-d368-4ae8-8fd9-7c3ffc48af73" />
-      <img width="1280" height="2856" alt="Screenshot_1756112714" src="https://github.com/user-attachments/assets/ed60ef0f-d0ba-4350-b044-c49bfa9b2767" />
-       <img width="1280" height="2856" alt="Screenshot_1756112720" src="https://github.com/user-attachments/assets/6076e3a1-0b41-4801-8fc5-60e16cd9b5fd" />
+     <img src="https://github.com/user-attachments/assets/3e22da45-d368-4ae8-8fd9-7c3ffc48af73" alt="Screenshot_1756112657" width="250"/>
+<img src="https://github.com/user-attachments/assets/ed60ef0f-d0ba-4350-b044-c49bfa9b2767" alt="Screenshot_1756112714" width="250"/>
+<img src="https://github.com/user-attachments/assets/6076e3a1-0b41-4801-8fc5-60e16cd9b5fd" alt="Screenshot_1756112720" width="250"/>
 
 
 
