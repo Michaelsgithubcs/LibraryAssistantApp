@@ -1,4 +1,4 @@
-# 📚 Learnly Library Aid - Intelligent Library Management System
+# 📚 Library Assistant App - Intelligent Library Management System
 
 A modern, AI-powered library management solution that transforms traditional libraries into smart, interactive learning hubs. Manage both physical and digital collections while providing an enriched reading experience through advanced AI features.
 
