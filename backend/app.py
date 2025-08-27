@@ -192,10 +192,11 @@ def get_books():
     
     query = '''
         SELECT b.*, 
-               COALESCE(AVG(br.rating), 0) as avg_rating,
-               COUNT(br.rating) as rating_count
+               0 as avg_rating,
+               0 as rating_count
         FROM books b
-        LEFT JOIN book_ratings br ON b.id = br.book_id
+        -- Rating functionality removed
+        -- LEFT JOIN book_ratings br ON b.id = br.book_id
         WHERE 1=1
     '''
     params = []
@@ -240,24 +241,8 @@ def get_books():
 
 @app.route('/api/books/<int:book_id>/rate', methods=['POST'])
 def rate_book():
-    data = request.json
-    book_id = request.view_args['book_id']
-    user_id = data.get('user_id', 1)  # Default user for demo
-    rating = data.get('rating')
-    review = data.get('review', '')
-    
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT OR REPLACE INTO book_ratings (book_id, user_id, rating, review)
-        VALUES (?, ?, ?, ?)
-    ''', (book_id, user_id, rating, review))
-    
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'message': 'Rating submitted successfully'})
+    # Rating functionality disabled
+    return jsonify({'message': 'Rating functionality has been disabled'})
 
 @app.route('/api/books/<int:book_id>/purchase', methods=['POST'])
 def purchase_book():
@@ -1515,4 +1500,4 @@ def ai_book_assistant_v2():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5003)
+    app.run(debug=True, port=5001)

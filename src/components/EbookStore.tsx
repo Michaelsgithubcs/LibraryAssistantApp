@@ -3,9 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Star, Search, ShoppingCart, Download, CreditCard } from "lucide-react";
+import { BookOpen, Search, ShoppingCart, Download, CreditCard } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface EbookStoreProps {
@@ -15,10 +13,7 @@ interface EbookStoreProps {
 export const EbookStore = ({ user }: EbookStoreProps) => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
-  const [userRating, setUserRating] = useState(0);
-  const [userReview, setUserReview] = useState("");
 
   const categories = ["Fiction", "Non-Fiction", "Romance", "Mystery", "Sci-Fi", "Biography", "Poetry"];
 
@@ -43,8 +38,6 @@ export const EbookStore = ({ user }: EbookStoreProps) => {
           price: 0,
           currency: 'FREE',
           isFree: item.ia ? true : false,
-          rating: item.ratings_average || 0,
-          ratingCount: item.ratings_count || 0,
           description: item.first_sentence?.join(' ') || item.subtitle || 'Available on Open Library.',
           coverImage: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-L.jpg` : '/placeholder.svg',
           readLink: `https://openlibrary.org${item.key}`,
@@ -94,54 +87,11 @@ export const EbookStore = ({ user }: EbookStoreProps) => {
     }
   };
 
-  const openRatingDialog = (book) => {
-    setSelectedBook(book);
-    setShowRatingDialog(true);
-  };
+  // Rating dialog functionality removed
 
-  const submitRating = async () => {
-    try {
-      const response = await fetch(`http://localhost:5001/api/books/${selectedBook.id}/rate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          rating: userRating,
-          review: userReview
-        })
-      });
-      
-      if (response.ok) {
-        alert('Rating submitted successfully!');
-        setShowRatingDialog(false);
-        setUserRating(0);
-        setUserReview("");
-      } else {
-        alert('Failed to submit rating');
-      }
-    } catch (error) {
-      console.error('Rating error:', error);
-      alert('Failed to submit rating');
-    }
-  };
+  // Rating functionality removed
 
-  const renderStars = (rating, interactive = false, onRate = null) => {
-    return (
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`h-4 w-4 ${
-              star <= rating 
-                ? "fill-yellow-400 text-yellow-400" 
-                : "text-gray-300"
-            } ${interactive ? "cursor-pointer hover:text-yellow-400" : ""}`}
-            onClick={interactive ? () => onRate(star) : undefined}
-          />
-        ))}
-      </div>
-    );
-  };
+  // Rating function removed
 
   return (
     <div className="space-y-6">
@@ -213,21 +163,7 @@ export const EbookStore = ({ user }: EbookStoreProps) => {
                 {book.description}
               </p>
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {renderStars(book.rating)}
-                  <span className="text-sm text-muted-foreground">
-                    ({book.ratingCount})
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openRatingDialog(book)}
-                >
-                  Rate
-                </Button>
-              </div>
+              {/* Rating section removed */}
 
               <div className="flex items-center justify-between">
                 <div className="text-lg font-bold">
@@ -260,42 +196,7 @@ export const EbookStore = ({ user }: EbookStoreProps) => {
         </div>
       )}
 
-      {/* Rating Dialog */}
-      <Dialog open={showRatingDialog} onOpenChange={setShowRatingDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rate Book</DialogTitle>
-            <DialogDescription>
-              Share your thoughts about "{selectedBook?.title}"
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Your Rating</label>
-              <div className="mt-2">
-                {renderStars(userRating, true, setUserRating)}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Review (Optional)</label>
-              <Textarea
-                placeholder="Write your review..."
-                value={userReview}
-                onChange={(e) => setUserReview(e.target.value)}
-                className="mt-2"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowRatingDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={submitRating} disabled={userRating === 0}>
-                Submit Rating
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Rating functionality removed */}
     </div>
   );
 };

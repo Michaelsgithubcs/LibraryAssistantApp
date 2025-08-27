@@ -28,7 +28,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     title: string;
     author: string;
     category: string;
-    rating: number;
     estimatedTime: number;
     coverImage?: string;
   }
@@ -70,9 +69,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
           availableCopies: book.availableCopies || 0,
           totalCopies: book.totalCopies || 1,
           publishDate: book.publishDate || new Date().toISOString().split('T')[0],
-          avg_rating: book.avg_rating || 0,
-          rating_count: book.rating_count || 0,
-          rating: book.rating || 0,
           estimatedTime: book.estimatedTime || 0,
           coverImage: book.coverImage || 'https://via.placeholder.com/150',
           reading_time_minutes: book.reading_time_minutes || 0
@@ -91,9 +87,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             availableCopies: 5,
             totalCopies: 10,
             publishDate: '1925-04-10',
-            avg_rating: 4.5,
-            rating_count: 1000,
-            rating: 4.5,
             estimatedTime: 4,
             coverImage: 'https://via.placeholder.com/150',
             reading_time_minutes: 240
@@ -154,11 +147,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             availableCopies: typeof book.availableCopies === 'number' ? book.availableCopies : 0,
             totalCopies: typeof book.totalCopies === 'number' ? book.totalCopies : 1,
             publishDate: typeof book.publishDate === 'string' ? book.publishDate : new Date().toISOString().split('T')[0],
-            // Optional properties with type checking
-            ...(typeof book.avg_rating === 'number' && { avg_rating: book.avg_rating }),
-            ...(typeof book.rating_count === 'number' && { rating_count: book.rating_count }),
-            rating: typeof book.rating === 'number' ? book.rating : 
-                   typeof book.avg_rating === 'number' ? book.avg_rating : 4.0,
+            // Rating related properties removed
             ...(typeof book.estimatedTime === 'number' && { estimatedTime: book.estimatedTime }),
             ...(typeof book.coverImage === 'string' && { coverImage: book.coverImage })
           };
@@ -296,7 +285,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
                   <Text style={styles.bookAuthor}>by {book.author}</Text>
                   <View style={styles.bookMeta}>
                     <Text style={styles.categoryBadge}>{book.category}</Text>
-                    <Text style={styles.bookRating}>⭐ {book.rating}</Text>
                     <Text style={styles.bookTime}>{book.estimatedTime}min</Text>
                   </View>
                 </View>
@@ -325,7 +313,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
                   <Text style={styles.bookAuthor}>by {book.author}</Text>
                   <View style={styles.bookMeta}>
                     <Text style={styles.categoryBadge}>{book.category}</Text>
-                    <Text style={styles.bookRating}>⭐ {book.rating}</Text>
                     <Text style={styles.bookTime}>{book.estimatedTime}min</Text>
                   </View>
                 </View>
@@ -464,10 +451,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   
-  bookRating: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
+  // Rating style removed
   
   bookTime: {
     fontSize: 12,

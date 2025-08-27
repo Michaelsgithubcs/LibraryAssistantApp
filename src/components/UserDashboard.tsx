@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Clock, AlertTriangle, Star, Calendar, ShoppingCart, MessageCircle, CreditCard } from "lucide-react";
+import { BookOpen, Clock, AlertTriangle, Calendar, ShoppingCart, MessageCircle, CreditCard, BookMarked } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BookChatbot } from "./BookChatbot";
 
@@ -43,7 +43,6 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
           title: book.title,
           author: book.author,
           category: book.category,
-          rating: book.avg_rating,
           estimatedTime: book.reading_time_minutes
         })));
       }
@@ -141,7 +140,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Reservations</CardTitle>
-                <Star className="h-4 w-4 text-muted-foreground" />
+                <BookMarked className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{userStats.reservations}</div>
@@ -167,10 +166,6 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
                           <p className="text-sm text-muted-foreground">{book.author}</p>
                           <div className="flex items-center gap-2 mt-2">
                             <Badge variant="outline">{book.category}</Badge>
-                            <div className="flex items-center gap-1">
-                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                              <span className="text-xs">{book.rating}</span>
-                            </div>
                             <span className="text-xs text-muted-foreground">{book.estimatedTime}min</span>
                           </div>
                         </div>

@@ -121,11 +121,7 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
                 ]}>
                   Available: {book.availableCopies}/{book.totalCopies}
                 </Text>
-                {book.avg_rating && book.rating_count && (
-                  <Text style={commonStyles.textSecondary}>
-                    ⭐ {book.avg_rating.toFixed(1)} ({book.rating_count} reviews)
-                  </Text>
-                )}
+                {/* Rating information removed */}
               </View>
             </View>
 

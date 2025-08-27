@@ -16,24 +16,13 @@ class RecommendationService:
 
     def get_user_ratings(self, user_id: int) -> Dict[int, float]:
         """Get all book ratings for a specific user"""
-        conn = self.get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT book_id, rating FROM book_ratings 
-            WHERE user_id = ?
-        ''', (user_id,))
-        return {book_id: rating for book_id, rating in cursor.fetchall()}
+        # Rating functionality removed
+        return {}
 
     def get_all_ratings(self) -> Dict[int, Dict[int, float]]:
         """Get all ratings from all users"""
-        conn = self.get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT user_id, book_id, rating FROM book_ratings')
-        
-        user_ratings = defaultdict(dict)
-        for user_id, book_id, rating in cursor.fetchall():
-            user_ratings[user_id][book_id] = rating
-        return user_ratings
+        # Rating functionality removed
+        return defaultdict(dict)
 
     def get_book_features(self) -> Dict[int, str]:
         """Get book features (title, author, category, description) for content-based filtering"""
