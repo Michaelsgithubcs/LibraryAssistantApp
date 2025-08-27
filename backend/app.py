@@ -8,6 +8,7 @@ import hashlib
 import secrets
 import google.generativeai as genai
 from recommendation_service import RecommendationService
+from ml_recommendation_service import MLRecommendationService
 
 app = Flask(__name__)
 CORS(app)
@@ -1345,8 +1346,9 @@ def get_read_history(user_id):
 # Initialize database on import
 init_db()
 
-# Initialize recommendation service
+# Initialize recommendation services
 recommendation_service = RecommendationService(DATABASE)
+ml_recommendation_service = MLRecommendationService(DATABASE)
 
 @app.route('/api/ai/assistant', methods=['POST'])
 def ai_book_assistant():
@@ -1384,16 +1386,59 @@ def ai_book_assistant():
 @app.route('/api/recommendations/<int:user_id>', methods=['GET'])
 def get_recommendations(user_id):
     try:
-        # Get recommendation type from query params (default: hybrid)
-        rec_type = request.args.get('type', 'hybrid')
+        # Get recommendation type from query params (default: ml)
+        rec_type = request.args.get('type', 'ml')
         limit = int(request.args.get('limit', '5'))
         
-        if rec_type == 'collaborative':
-            recommendations = recommendation_service.collaborative_filtering(user_id, limit)
-        elif rec_type == 'content':
-            recommendations = recommendation_service.content_based_filtering(user_id, limit)
-        else:  # hybrid
-            recommendations = recommendation_service.hybrid_recommendation(user_id, limit)
+        if rec_type == 'ml':
+            # Use the new ML-based recommendation service
+            ml_recs = ml_recommendation_service.get_recommendations(user_id, limit)
+            # Extract content-based recommendations as the main recommendation list
+            recommendations = ml_recs.get('content_based', [])
+        else:
+            # For legacy recommendation types, we need to filter here
+            if rec_type == 'collaborative':
+                recommendations = recommendation_service.collaborative_filtering(user_id, limit * 2)
+            elif rec_type == 'content':
+                recommendations = recommendation_service.content_based_filtering(user_id, limit * 2)
+            else:  # hybrid
+                recommendations = recommendation_service.hybrid_recommendation(user_id, limit * 2)
+            
+            # Filter out books the user has already borrowed or purchased
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+            user_books = set()
+            
+            # Try the user_interactions table first (our new schema)
+            try:
+                cursor.execute("""
+                    SELECT DISTINCT book_id FROM user_interactions 
+                    WHERE user_id = ? AND action_type IN ('borrow', 'purchase')
+                """, (user_id,))
+                user_books = {row[0] for row in cursor.fetchall()}
+            except sqlite3.OperationalError:
+                # If user_interactions doesn't exist, continue with empty set
+                pass
+            
+            # Try purchases table if it exists
+            try:
+                cursor.execute("""
+                    SELECT DISTINCT book_id FROM purchases
+                    WHERE user_id = ?
+                """, (user_id,))
+                user_books.update({row[0] for row in cursor.fetchall()})
+            except sqlite3.OperationalError:
+                pass
+                
+            conn.close()
+            
+            # Remove already borrowed books from recommendations
+            if isinstance(recommendations, list):
+                # Handle list of dicts format
+                recommendations = [r for r in recommendations if r.get('id') not in user_books][:limit]
+            else:
+                # Handle list of tuples format (book_id, title, score)
+                recommendations = [r for r in recommendations if r[0] not in user_books][:limit]
         
         return jsonify({
             'success': True,
@@ -1406,6 +1451,26 @@ def get_recommendations(user_id):
         return jsonify({
             'success': False,
             'error': 'Failed to generate recommendations',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/similar-books/<int:book_id>', methods=['GET'])
+def get_similar_books(book_id):
+    try:
+        limit = int(request.args.get('limit', '5'))
+        
+        # Get similar books using ML recommendation service
+        similar_books = ml_recommendation_service.get_similar_books(book_id, limit)
+        
+        return jsonify({
+            'success': True,
+            'similar_books': similar_books
+        })
+    except Exception as e:
+        print(f"Error in get_similar_books: {str(e)}", file=sys.stderr)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to find similar books',
             'details': str(e)
         }), 500
 

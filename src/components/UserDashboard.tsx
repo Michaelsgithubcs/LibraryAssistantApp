@@ -35,19 +35,47 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
 
   const fetchSuggestions = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/books');
+      // First, try to fetch ML-powered recommendations for the user
+      const response = await fetch(`http://localhost:5001/api/recommendations/${user.id}?type=ml&limit=5`);
       if (response.ok) {
         const data = await response.json();
-        setBookSuggestions(data.slice(0, 2).map(book => ({
-          id: book.id,
-          title: book.title,
-          author: book.author,
-          category: book.category,
-          estimatedTime: book.reading_time_minutes
-        })));
+        if (data.success && data.recommendations && data.recommendations.length > 0) {
+          // Format the ML recommendations for display
+          setBookSuggestions(data.recommendations.slice(0, 4).map(book => ({
+            id: book.id,
+            title: book.title,
+            author: book.author || 'Unknown',
+            category: book.category || 'General',
+            estimatedTime: book.reading_time_minutes || 30
+          })));
+          return;
+        }
+      }
+      
+      // If ML recommendations fail or are empty, fall back to regular books
+      try {
+        const booksResponse = await fetch('http://localhost:5001/api/books');
+        if (booksResponse.ok) {
+          const booksData = await booksResponse.json();
+          // Filter out books that the user might already have
+          const filteredBooks = booksData.filter(book => 
+            book.available_copies > 0 && 
+            book.total_copies > 0
+          );
+          
+          setBookSuggestions(filteredBooks.slice(0, 4).map(book => ({
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category || 'General',
+            estimatedTime: book.reading_time_minutes || 30
+          })));
+        }
+      } catch (fallbackError) {
+        console.error('Error fetching fallback suggestions:', fallbackError);
       }
     } catch (error) {
-      console.error('Error fetching suggestions:', error);
+      console.error('Error fetching recommendations:', error);
     }
   };
 
@@ -165,7 +193,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
                           <h4 className="font-semibold">{book.title}</h4>
                           <p className="text-sm text-muted-foreground">{book.author}</p>
                           <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="outline">{book.category}</Badge>
+                            <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold text-foreground">{book.category}</div>
                             <span className="text-xs text-muted-foreground">{book.estimatedTime}min</span>
                           </div>
                         </div>
