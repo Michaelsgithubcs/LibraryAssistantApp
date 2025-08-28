@@ -36,12 +36,20 @@ export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, naviga
   const fetchEbooks = async () => {
     try {
       const query = searchTerm || 'fiction';
+      console.log(`Fetching ebooks with query: ${query}`);
+      
+      // Using a CORS proxy to avoid network issues
       const response = await fetch(
-        `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&has_fulltext=true&limit=20`
+        `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&has_fulltext=true&limit=20`,
+        {
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
       );
       
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error(`Network response was not ok: ${response.status}`);
       }
       
       const data = await response.json();

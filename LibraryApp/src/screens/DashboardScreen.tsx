@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Image, TouchableOpacity, Alert } from 'react-native';
 import { ModernCard } from '../components/ModernCard';
 import { AdminCard } from '../components/AdminCard';
 import { Button } from '../components/Button';
+import { ReserveButton } from '../components/ReserveButton';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
@@ -33,12 +34,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
   }
 
   const [recommendedBooks, setRecommendedBooks] = useState<Book[]>([]);
+  const [newBooks, setNewBooks] = useState<Book[]>([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [userReservations, setUserReservations] = useState<ReservationStatus[]>([]);
   const [userBooks, setUserBooks] = useState<IssuedBook[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    // Load both dashboard data and ML recommendations automatically when app opens
     fetchDashboardData();
+    loadMLRecommendations(); // Automatically fetch ML recommendations
+    loadNewBooks(); // Load the newest books
   }, []);
 
   const fetchDashboardData = async () => {
@@ -55,45 +62,52 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Update reservations
       setUserReservations(reservations);
 
-      // Get all books for fallback recommendations
-      const allBooks = await apiClient.getBooks();
-      
-      // Update recommended books with fallback
-      if (allBooks && allBooks.length > 0) {
-        // Get 3 random books as recommendations
-        const shuffled = [...allBooks].sort(() => 0.5 - Math.random());
-        const validRecommendations: Book[] = shuffled.slice(0, 3).map(book => ({
-          ...book,
-          isbn: book.isbn || '',
-          description: book.description || '',
-          availableCopies: book.availableCopies || 0,
-          totalCopies: book.totalCopies || 1,
-          publishDate: book.publishDate || new Date().toISOString().split('T')[0],
-          estimatedTime: book.estimatedTime || 0,
-          coverImage: book.coverImage || 'https://via.placeholder.com/150',
-          reading_time_minutes: book.reading_time_minutes || 0
-        }));
-        setRecommendedBooks(validRecommendations);
+      // Only set fallback recommendations if ML recommendations aren't loaded yet
+      if (!recommendationsLoaded) {
+        console.log("No ML recommendations loaded yet, using fallback recommendations");
+        
+        // Get all books for fallback recommendations
+        const allBooks = await apiClient.getBooks();
+        
+        // Update recommended books with fallback
+        if (allBooks && allBooks.length > 0) {
+          // Get 3 random books as recommendations
+          const shuffled = [...allBooks].sort(() => 0.5 - Math.random());
+          const validRecommendations: Book[] = shuffled.slice(0, 3).map(book => ({
+            ...book,
+            isbn: book.isbn || '',
+            description: book.description || '',
+            availableCopies: book.availableCopies || 0,
+            totalCopies: book.totalCopies || 1,
+            publishDate: book.publishDate || new Date().toISOString().split('T')[0],
+            estimatedTime: book.estimatedTime || 0,
+            coverImage: book.coverImage || 'https://via.placeholder.com/150',
+            reading_time_minutes: book.reading_time_minutes || 0
+          }));
+          setRecommendedBooks(validRecommendations);
+        } else {
+          // Fallback to default books if no recommendations
+          const defaultBooks: Book[] = [
+            {
+              id: '1',
+              title: 'The Great Gatsby',
+              author: 'F. Scott Fitzgerald',
+              isbn: '9780743273565',
+              category: 'Classic',
+              description: 'A story of decadence and excess in the Jazz Age',
+              availableCopies: 5,
+              totalCopies: 10,
+              publishDate: '1925-04-10',
+              estimatedTime: 4,
+              coverImage: 'https://via.placeholder.com/150',
+              reading_time_minutes: 240
+            },
+            // ... other default books
+          ];
+          setRecommendedBooks(defaultBooks);
+        }
       } else {
-        // Fallback to default books if no recommendations
-        const defaultBooks: Book[] = [
-          {
-            id: '1',
-            title: 'The Great Gatsby',
-            author: 'F. Scott Fitzgerald',
-            isbn: '9780743273565',
-            category: 'Classic',
-            description: 'A story of decadence and excess in the Jazz Age',
-            availableCopies: 5,
-            totalCopies: 10,
-            publishDate: '1925-04-10',
-            estimatedTime: 4,
-            coverImage: 'https://via.placeholder.com/150',
-            reading_time_minutes: 240
-          },
-          // ... other default books
-        ];
-        setRecommendedBooks(defaultBooks);
+        console.log("ML recommendations already loaded, preserving them");
       }
 
       const today = new Date();
@@ -160,49 +174,370 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     }
   };
 
-  const handleReserveBook = async (bookId: string) => {
-    const isAlreadyReserved = userReservations.some(r => 
-      r.status === 'pending' && r.book_id.toString() === bookId
-    );
-    
-    if (isAlreadyReserved) {
-      Alert.alert('Already Reserved', 'You already have this book reserved.');
-      return;
-    }
-    
+  // Load ML recommendations
+  const loadMLRecommendations = async () => {
+    console.log("Loading ML recommendations with existing userReservations:", userReservations.map(r => `${r.book_title} (${r.book_id})`));
+    setLoadingRecommendations(true);
     try {
+      // First, get user's current books to ensure we filter them out
+      const myBooks = await apiClient.getMyBooks(user.id);
+      console.log("Current user books:", JSON.stringify(myBooks));
+      
+      // Extract book IDs and titles from borrowed books for filtering
+      const borrowedBookIds = myBooks.map(book => book.book_id ? book.book_id.toString() : '');
+      const borrowedBookTitles = myBooks.map(book => book.title ? book.title.toLowerCase() : '');
+      
+      console.log("Borrowed book IDs:", borrowedBookIds);
+      console.log("Borrowed book titles:", borrowedBookTitles);
+      
+      // Get ML recommendations from API
+      console.log(`Fetching ML recommendations for user: ${user.id}`);
+      
+      // Try with the ml type first - request more books than needed to handle filtering
+      let recs = await apiClient.getRecommendations(user.id, 'ml', 10);
+      console.log("ML recommendations response:", recs);
+      
+      // If that fails, try with content-based filtering
+      if (!recs || recs.length === 0) {
+        console.log("No ML recommendations, trying content-based");
+        recs = await apiClient.getRecommendations(user.id, 'content', 10);
+      }
+      
+      // If still no recommendations, try hybrid as a last resort
+      if (!recs || recs.length === 0) {
+        console.log("No content-based recommendations, trying hybrid");
+        recs = await apiClient.getRecommendations(user.id, 'hybrid', 10);
+      }
+      
+      // Log if we're getting scores (which indicates ML recommendations)
+      const hasMLScores = recs.some(book => book.score !== undefined && book.score !== null);
+      console.log("Using ML recommendations with scores:", hasMLScores);
+      
+      if (recs && recs.length > 0) {
+        console.log("Recommendations received:", recs.length);
+        console.log("Sample recommendation:", JSON.stringify(recs[0]));
+        
+        // Filter out already borrowed books by ID and title
+        const filteredRecs = recs.filter(book => {
+          const bookId = book.id ? book.id.toString() : '';
+          const bookTitle = book.title ? book.title.toLowerCase() : '';
+          
+          // Check if this book is already borrowed by ID or title
+          const isAlreadyBorrowed = 
+            borrowedBookIds.some(id => id === bookId) || 
+            borrowedBookTitles.some(title => title === bookTitle);
+            
+          if (isAlreadyBorrowed) {
+            console.log(`Book ${bookTitle} (${bookId}) already borrowed: ${isAlreadyBorrowed}`);
+            return false;
+          }
+          
+          // Check if this book is already reserved
+          const isAlreadyReserved = userReservations.some(r => {
+            try {
+              // Check if reservation is pending
+              if (r.status !== 'pending') return false;
+              
+              // Check by ID (safely)
+              const idMatch = r.book_id && bookId ? 
+                String(r.book_id) === bookId : false;
+              
+              // Check by title (safely)
+              const titleMatch = r.book_title && bookTitle ? 
+                r.book_title.toLowerCase() === bookTitle : false;
+                
+              return idMatch || titleMatch;
+            } catch (err) {
+              console.error(`Error checking reservation for book ${bookId}:`, err);
+              return false;
+            }
+          });
+          
+          if (isAlreadyReserved) {
+            console.log(`Book ${bookTitle} (${bookId}) already reserved`);
+            return false;
+          }
+          
+          return true;
+        });
+        
+        console.log(`After filtering: ${filteredRecs.length} recommendations remaining`);
+        
+        if (filteredRecs.length > 0) {
+          // Set recommended books and explicitly mark as loaded
+          setRecommendedBooks(filteredRecs);
+          console.log(`Setting ${filteredRecs.length} ML recommendations as loaded`);
+          
+          // Warn if we don't have enough recommendations
+          if (filteredRecs.length < 3) {
+            console.warn(`Only found ${filteredRecs.length} recommendations after filtering - consider adding more books or using a different recommendation algorithm.`);
+          }
+          
+          setRecommendationsLoaded(true);
+          return;
+        }
+      }
+      
+      console.log("No recommendations available, falling back to random books");
+      // Fallback to random books
+      const allBooks = await apiClient.getBooks();
+      const randomBooks = allBooks
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3)
+        .map(book => ({
+          ...book,
+          id: book.id.toString(),
+          availableCopies: book.availableCopies || 1,
+          totalCopies: book.totalCopies || 1,
+          isbn: book.isbn || 'Unknown',
+          description: book.description || '',
+          publishDate: book.publishDate || '',
+          estimatedTime: book.estimatedTime || book.reading_time_minutes || 0,
+          reading_time_minutes: book.reading_time_minutes || book.estimatedTime || 0
+        }));
+      
+      // If no ML recommendations are available, use random books but DON'T mark as ML loaded
+      // This allows a future refresh to try ML recommendations again
+      setRecommendedBooks(randomBooks);
+      console.log("Using fallback recommendations, NOT marking ML as loaded");
+    } catch (error) {
+      console.error("Error in fetchMLRecommendations:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      try {
+        // Reliable fallback to random books
+        const allBooks = await apiClient.getBooks();
+        const randomBooks = allBooks
+          .sort(() => 0.5 - Math.random())
+          .slice(0, 3)
+          .map(book => ({
+            ...book,
+            id: book.id.toString(),
+            availableCopies: book.availableCopies || 1,
+            totalCopies: book.totalCopies || 1,
+            isbn: book.isbn || 'Unknown',
+            description: book.description || '',
+            publishDate: book.publishDate || '',
+            estimatedTime: book.estimatedTime || book.reading_time_minutes || 0,
+            reading_time_minutes: book.reading_time_minutes || book.estimatedTime || 0
+          }));
+        
+        setRecommendedBooks(randomBooks);
+        setRecommendationsLoaded(true);
+      } catch (fallbackError) {
+        console.error("Even fallback failed:", fallbackError);
+      }
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  const handleReserveBook = async (bookId: string) => {
+    try {
+      // Find the book info for logging purposes
+      const bookToReserve = [...recommendedBooks, ...newBooks].find(book => book.id === bookId);
+      if (!bookToReserve) {
+        console.error(`Cannot find book with ID: ${bookId} in recommendations or new books`);
+        Alert.alert('Error', 'Book information not found. Please try again.');
+        return;
+      }
+      
+      const bookTitle = bookToReserve.title;
+      
+      console.log(`Attempting to reserve book: ${bookId} - ${bookTitle}`);
+      
+      // Check if already reserved (safely)
+      const isAlreadyReserved = userReservations.some(r => {
+        try {
+          // Safely check status
+          const isPending = r.status === 'pending';
+          
+          // Safely check book_id (guard against undefined)
+          const bookIdMatch = r.book_id ? String(r.book_id) === String(bookId) : false;
+          
+          // Safely check book_title
+          const titleMatch = r.book_title && bookTitle ? 
+            r.book_title.toLowerCase() === bookTitle.toLowerCase() : false;
+            
+          return isPending && (bookIdMatch || titleMatch);
+        } catch (err) {
+          console.error(`Error checking reservation for book ${bookId}:`, err);
+          return false;
+        }
+      });
+      
+      if (isAlreadyReserved) {
+        Alert.alert('Already Reserved', 'You already have this book reserved.');
+        return;
+      }
+      
+      // Check if already borrowed
+      const isAlreadyBorrowed = userBooks.some(b => 
+        String(b.book_id) === String(bookId) || b.title === bookTitle
+      );
+      
+      if (isAlreadyBorrowed) {
+        Alert.alert('Already Borrowed', 'You already have this book borrowed.');
+        return;
+      }
+      
+      // Show reservation in progress
+      Alert.alert('Sending Request', 'Sending your reservation request...');
+      
+      // Make the API call with proper error handling
       const result = await apiClient.reserveBook(bookId, user.id);
+      
+      // Success feedback
       Alert.alert('Success', result.message || 'Book reserved successfully!');
-      // Force refresh to update button state
+      
+      console.log(`Book ${bookId} - ${bookTitle} reserved successfully`);
+      
+      // Remove the reserved book from both recommended and new books lists immediately
+      setRecommendedBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
+      setNewBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
+      
+      // Add this book to the virtual userReservations list immediately for UI feedback
+      const virtualReservation: ReservationStatus = {
+        id: Date.now().toString(), // Temporary ID
+        book_id: bookId,
+        status: 'pending',
+        book_title: bookTitle,
+        book_author: bookToReserve.author
+      };
+      
+      setUserReservations(prev => [...prev, virtualReservation]);
+      
+      // Update the user's reservations and stats asynchronously
       setTimeout(() => {
-        fetchDashboardData();
+        // Get updated user reservations without refreshing everything
+        apiClient.getReservationStatus(user.id).then(reservations => {
+          setUserReservations(reservations);
+          
+          // Update stats without refreshing recommendations
+          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+          const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
+          
+          setStats(prevStats => ({
+            ...prevStats,
+            reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
+            reservationStatus: { hasApproved, hasRejected }
+          }));
+          
+          // Always reload both recommendations and new books when any book is reserved
+          console.log("Reloading recommendations after reservation");
+          loadMLRecommendations();
+          
+          // Also reload new books
+          console.log("Reloading new books after reservation");
+          loadNewBooks();
+          
+          console.log("Updated reservation status and refreshed book recommendations");
+        }).catch(err => {
+          console.error("Error getting updated reservation status:", err);
+        });
       }, 500);
     } catch (error) {
+      console.error("Error reserving book:", error);
+      
+      // Even with an error, we want the UI to be responsive
       Alert.alert('Success', 'Reservation request sent! Admin will review your request.');
-      // Force refresh to update button state
+      
+      // Find book info again for safety
+      const bookToReserve = [...recommendedBooks, ...newBooks].find(book => book.id === bookId);
+      if (!bookToReserve) {
+        console.error(`Cannot find book with ID: ${bookId} in recommendations or new books`);
+        return;
+      }
+      
+      // Same logic as above even if there's a network error but the UI should respond
+      const virtualReservation: ReservationStatus = {
+        id: Date.now().toString(),
+        book_id: bookId,
+        status: 'pending',
+        book_title: bookToReserve.title,
+        book_author: bookToReserve.author
+      };
+      
+      // Update UI immediately to give feedback
+      setUserReservations(prev => [...prev, virtualReservation]);
+      setRecommendedBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
+      setNewBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
+      
       setTimeout(() => {
-        fetchDashboardData();
+        apiClient.getReservationStatus(user.id).then(reservations => {
+          setUserReservations(reservations);
+          
+          // Update stats without refreshing recommendations
+          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+          const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
+          
+          setStats(prevStats => ({
+            ...prevStats,
+            reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
+            reservationStatus: { hasApproved, hasRejected }
+          }));
+          
+          // Load one more book into recommendations if needed
+          if (recommendedBooks.some(book => book.id === bookId)) {
+            loadMLRecommendations();
+          }
+          
+          console.log("Updated reservation status after reservation request");
+        }).catch(err => {
+          console.error("Error getting updated reservation status after error:", err);
+        });
       }, 500);
     }
   };
   
   const getBookStatus = (bookId: string, bookTitle: string, availableCopies: number) => {
-    const isReserved = userReservations.some(r => 
-      r.status === 'pending' && r.book_title === bookTitle
-    );
-    
-    const isIssued = userBooks.some(b => 
-      String(b.book_id) === String(bookId) ||
-      b.title === bookTitle
-    );
-    
-    console.log(`Book status check - ID: ${bookId}, Title: ${bookTitle}, Reserved: ${isReserved}, Issued: ${isIssued}`);
-    console.log('User books:', userBooks.map(b => ({ id: b.id, book_id: b.book_id, title: b.title })));
-    
-    if (isIssued) return { disabled: true, text: 'Already Borrowed' };
-    if (isReserved) return { disabled: true, text: 'Reserved' };
-    if (availableCopies === 0) return { disabled: true, text: 'Unavailable' };
-    return { disabled: false, text: 'Reserve' };
+    try {
+      // Safety check for parameters
+      const safeBookId = bookId || '';
+      const safeBookTitle = bookTitle || '';
+      
+      // Check if book is already issued to the user (safely)
+      const isIssued = userBooks.some(b => {
+        try {
+          const bookMatchById = b.book_id ? String(b.book_id) === String(safeBookId) : false;
+          const bookMatchByTitle = b.title && safeBookTitle ? 
+            b.title.toLowerCase() === safeBookTitle.toLowerCase() : false;
+          return bookMatchById || bookMatchByTitle;
+        } catch (err) {
+          console.error(`Error in isIssued check for book ${safeBookId}:`, err);
+          return false;
+        }
+      });
+      
+      // Check if book is already reserved by the user (safely)
+      const isReserved = userReservations.some(r => {
+        try {
+          const pendingStatus = r.status === 'pending';
+          const bookMatchById = r.book_id ? String(r.book_id) === String(safeBookId) : false;
+          const bookMatchByTitle = r.book_title && safeBookTitle ? 
+            r.book_title.toLowerCase() === safeBookTitle.toLowerCase() : false;
+          return pendingStatus && (bookMatchById || bookMatchByTitle);
+        } catch (err) {
+          console.error(`Error in isReserved check for book ${safeBookId}:`, err);
+          return false;
+        }
+      });
+      
+      // More detailed logging to help debug issues
+      console.log(`Book status check - ID: ${safeBookId}, Title: ${safeBookTitle}`);
+      console.log(`Available copies: ${availableCopies}, Reserved: ${isReserved}, Issued: ${isIssued}`);
+      
+      if (isIssued) return { disabled: true, text: 'Already Borrowed' };
+      if (isReserved) return { disabled: true, text: 'Reserved' };
+      if (!availableCopies || availableCopies === 0) return { disabled: true, text: 'Unavailable' };
+      
+      // Book is available to reserve
+      return { disabled: false, text: 'Reserve' };
+    } catch (error) {
+      console.error("Error in getBookStatus:", error);
+      // Default to disabled if there's an error
+      return { disabled: true, text: 'Unavailable' };
+    }
   };
   
   const handleReservationsPress = () => {
@@ -213,10 +548,145 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     }
   };
 
+  // Load the newest books (most recently added)
+  const loadNewBooks = async () => {
+    try {
+      const allBooks = await apiClient.getBooks();
+      
+      if (allBooks && allBooks.length > 0) {
+        // Sort books by newest first - assuming newer books have higher IDs or more recent dates
+        // This is a simple approach - in a real app, we'd have a 'created_at' field to sort by
+        const sortedBooks = [...allBooks].sort((a, b) => {
+          // If books have publishDate, sort by that (descending)
+          if (a.publishDate && b.publishDate) {
+            return new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime();
+          }
+          // Otherwise sort by ID (descending, assuming newer books have higher IDs)
+          return Number(b.id) - Number(a.id);
+        });
+        
+        // Get most recent 6 books initially, then filter and take 3
+        // This gives us more buffer in case some books are filtered out
+        const recentBooks = sortedBooks
+          .slice(0, 8) // Get more books initially to ensure we have enough after filtering
+          .filter(book => {
+            // Filter out already borrowed or reserved books
+            const bookId = book.id.toString();
+            const bookTitle = book.title.toLowerCase();
+            
+            // Skip if already borrowed (with null safety)
+            const isBorrowed = userBooks.some(b => {
+              try {
+                const borrowedId = b.book_id ? String(b.book_id) : '';
+                const borrowedTitle = b.title ? b.title.toLowerCase() : '';
+                return (borrowedId && borrowedId === bookId) || 
+                       (borrowedTitle && bookTitle && borrowedTitle === bookTitle);
+              } catch (err) {
+                console.error(`Error checking borrowed book ${bookId}:`, err);
+                return false;
+              }
+            });
+            
+            // Skip if already reserved (with null safety)
+            const isReserved = userReservations.some(r => {
+              try {
+                // Only filter out pending reservations
+                if (r.status !== 'pending') return false;
+                
+                const reservedId = r.book_id ? String(r.book_id) : '';
+                const reservedTitle = r.book_title ? r.book_title.toLowerCase() : '';
+                
+                return (reservedId && reservedId === bookId) || 
+                       (reservedTitle && bookTitle && reservedTitle === bookTitle);
+              } catch (err) {
+                console.error(`Error checking reserved book ${bookId}:`, err);
+                return false;
+              }
+            });
+            
+            return !isBorrowed && !isReserved;
+          })
+          .slice(0, 3)
+          .map(book => ({
+            ...book,
+            isbn: book.isbn || '',
+            description: book.description || '',
+            availableCopies: book.availableCopies || 1,
+            totalCopies: book.totalCopies || 1
+          }));
+        
+        console.log(`Loaded ${recentBooks.length} new books`);
+        
+        if (recentBooks.length === 0) {
+          console.warn("No new books available after filtering! Consider adjusting filters or adding more books.");
+        } else if (recentBooks.length < 3) {
+          console.warn(`Only found ${recentBooks.length} new books - consider adding more books to the library.`);
+        }
+        
+        setNewBooks(recentBooks);
+      }
+    } catch (error) {
+      console.error('Error loading new books:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDashboardData();
-    setRefreshing(false);
+    try {
+      console.log("Full dashboard refresh requested");
+      
+      // Update stats, user books and reservations
+      const [myBooks, reservations, fines] = await Promise.all([
+        apiClient.getMyBooks(user.id),
+        apiClient.getReservationStatus(user.id),
+        apiClient.getMyFines(user.id)
+      ]);
+
+      // Update books
+      setUserBooks(myBooks);
+
+      // Update reservations
+      setUserReservations(reservations);
+      
+      // Reload both recommendations and new books
+      console.log("Refreshing all book lists");
+      await loadMLRecommendations();
+      await loadNewBooks();
+
+      // Calculate statistics without touching recommendations
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const overdueCount = myBooks.filter((book: IssuedBook) => {
+        const dueDate = new Date(book.due_date);
+        dueDate.setHours(0, 0, 0, 0);
+        return dueDate < today && book.status === 'issued';
+      }).length;
+
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
+
+      // Calculate total outstanding fines
+      const totalFines = Array.isArray(fines) ? fines.reduce((sum: number, fine: any) => {
+        const damage = typeof fine.damageFine === 'number' ? fine.damageFine : 0;
+        const overdue = typeof fine.overdueFine === 'number' ? fine.overdueFine : 0;
+        return sum + damage + overdue;
+      }, 0) : 0;
+
+      setStats({
+        booksIssued: myBooks.length,
+        overdueBooks: overdueCount,
+        totalFines,
+        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
+        reservationStatus: { hasApproved, hasRejected }
+      });
+
+      console.log("Refreshed user data while preserving ML recommendations");
+    } catch (error) {
+      console.error('Error during refresh:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -273,59 +743,81 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
 
 
         <ModernCard variant="elevated">
-          <Text style={styles.sectionTitle}>Recommended for You</Text>
-          <Text style={styles.sectionSubtitle}>Books you might enjoy based on your reading history</Text>
-          
-          {recommendedBooks.map((book) => {
-            const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
-            return (
-              <View key={book.id} style={styles.bookRecommendation}>
-                <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle}>{book.title}</Text>
-                  <Text style={styles.bookAuthor}>by {book.author}</Text>
-                  <View style={styles.bookMeta}>
-                    <Text style={styles.categoryBadge}>{book.category}</Text>
-                    <Text style={styles.bookTime}>{book.estimatedTime}min</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={styles.sectionTitle}>Recommended for You</Text>
+              <Text style={styles.sectionSubtitle}>Books you might enjoy based on your reading history</Text>
+            </View>
+          </View>
+          {loadingRecommendations ? (
+            <View style={{ alignItems: 'center', marginVertical: 16 }}>
+              <Text style={styles.mlHelpText}>
+                Loading ML recommendations...
+              </Text>
+            </View>
+          ) : (
+            recommendedBooks.map((book) => {
+              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
+              return (
+                <View key={book.id} style={styles.bookRecommendation}>
+                  <View style={styles.bookInfo}>
+                    <Text style={styles.bookTitle}>{book.title}</Text>
+                    <Text style={styles.bookAuthor}>by {book.author}</Text>
+                    <View style={styles.bookMeta}>
+                      <Text style={styles.categoryBadge}>{book.category}</Text>
+                      <Text style={styles.bookTime}>{book.estimatedTime || book.reading_time_minutes || 0}min</Text>
+                      {book.score && (
+                        <Text style={styles.mlScoreBadge}>ML Score: {typeof book.score === 'number' ? book.score.toFixed(2) : book.score}</Text>
+                      )}
+                    </View>
                   </View>
+                  <ReserveButton
+                    bookId={book.id}
+                    bookTitle={book.title}
+                    buttonText={bookStatus.text}
+                    disabled={bookStatus.disabled}
+                    onReserve={handleReserveBook}
+                  />
                 </View>
-                <Button
-                  title={bookStatus.text}
-                  onPress={() => handleReserveBook(book.id)}
-                  variant={bookStatus.disabled ? "outline" : "primary"}
-                  disabled={bookStatus.disabled}
-                  style={styles.reserveButton}
-                />
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </ModernCard>
 
         <ModernCard variant="elevated">
           <Text style={styles.sectionTitle}>New Books</Text>
           <Text style={styles.sectionSubtitle}>Recently added to the library</Text>
           
-          {recommendedBooks.map((book) => {
-            const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
-            return (
-              <View key={`new-${book.id}`} style={styles.bookRecommendation}>
-                <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle}>{book.title}</Text>
-                  <Text style={styles.bookAuthor}>by {book.author}</Text>
-                  <View style={styles.bookMeta}>
-                    <Text style={styles.categoryBadge}>{book.category}</Text>
-                    <Text style={styles.bookTime}>{book.estimatedTime}min</Text>
+          {refreshing ? (
+            <View style={{ alignItems: 'center', marginVertical: 16 }}>
+              <Text style={styles.mlHelpText}>
+                Loading new books...
+              </Text>
+            </View>
+          ) : (
+            newBooks.map((book) => {
+              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
+              return (
+                <View key={`new-${book.id}`} style={styles.bookRecommendation}>
+                  <View style={styles.bookInfo}>
+                    <Text style={styles.bookTitle}>{book.title}</Text>
+                    <Text style={styles.bookAuthor}>by {book.author}</Text>
+                    <View style={styles.bookMeta}>
+                      <Text style={styles.categoryBadge}>{book.category}</Text>
+                      <Text style={styles.bookTime}>{book.estimatedTime || book.reading_time_minutes || 0}min</Text>
+                    </View>
                   </View>
+                  <ReserveButton
+                    bookId={book.id}
+                    bookTitle={book.title}
+                    buttonText={bookStatus.text}
+                    disabled={bookStatus.disabled}
+                    onReserve={handleReserveBook}
+                  />
                 </View>
-                <Button
-                  title={bookStatus.text}
-                  onPress={() => handleReserveBook(book.id)}
-                  variant={bookStatus.disabled ? "outline" : "primary"}
-                  disabled={bookStatus.disabled}
-                  style={styles.reserveButton}
-                />
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </ModernCard>
       </ScrollView>
     </View>
@@ -353,6 +845,17 @@ const styles = StyleSheet.create({
   
   content: {
     flex: 1,
+  },
+  
+
+  
+  mlHelpText: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   
   statsContainer: {
@@ -472,6 +975,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 12,
+  },
+  
+  mlScoreBadge: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#fff',
+    backgroundColor: colors.primary,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 10,
   },
   
   reservedBook: {

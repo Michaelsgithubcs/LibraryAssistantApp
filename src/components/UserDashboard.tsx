@@ -25,9 +25,10 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
 
 
   const [bookSuggestions, setBookSuggestions] = useState([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
 
   useEffect(() => {
-    fetchSuggestions();
+    // Only fetch user stats, not suggestions
     if (user.role === 'user') {
       fetchUserStats();
     }
@@ -181,26 +182,59 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
             <>
               {/* Book Suggestions */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Recommended for You</CardTitle>
-                  <CardDescription>Books you might enjoy based on your reading history</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Recommended for You</CardTitle>
+                    <CardDescription>Books you might enjoy based on your reading history</CardDescription>
+                  </div>
+                  <div 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (recommendationsLoaded) {
+                        fetchSuggestions();
+                      }
+                    }}
+                    className={`p-2 rounded-full cursor-pointer ${recommendationsLoaded ? 'hover:bg-gray-100 dark:hover:bg-gray-800' : 'text-gray-300 cursor-not-allowed'}`}
+                    title={recommendationsLoaded ? "Refresh recommendations" : "Load recommendations first"}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21.8883 13.5C21.1645 18.3113 17.013 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C16.1004 2 19.6096 4.64203 21.1707 8.31732" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                      <path d="M17 8H21.4C21.7314 8 22 7.73137 22 7.4V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {bookSuggestions.map((book) => (
-                      <div key={book.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <h4 className="font-semibold">{book.title}</h4>
-                          <p className="text-sm text-muted-foreground">{book.author}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold text-foreground">{book.category}</div>
-                            <span className="text-xs text-muted-foreground">{book.estimatedTime}min</span>
+                  {!recommendationsLoaded ? (
+                    <div className="flex flex-col items-center justify-center p-6">
+                      <p className="text-center text-muted-foreground mb-4">
+                        Click the button to load personalized book recommendations
+                      </p>
+                      <Button 
+                        onClick={() => {
+                          fetchSuggestions();
+                          setRecommendationsLoaded(true);
+                        }}
+                      >
+                        Load Recommendations
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {bookSuggestions.map((book) => (
+                        <div key={book.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{book.title}</h4>
+                            <p className="text-sm text-muted-foreground">{book.author}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold text-foreground">{book.category}</div>
+                              <span className="text-xs text-muted-foreground">{book.estimatedTime}min</span>
+                            </div>
                           </div>
+                          <Button size="sm" onClick={() => reserveBook(book.id)}>Reserve</Button>
                         </div>
-                        <Button size="sm" onClick={() => reserveBook(book.id)}>Reserve</Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>

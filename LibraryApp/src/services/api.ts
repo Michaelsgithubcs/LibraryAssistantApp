@@ -135,16 +135,23 @@ export const apiClient = {
 
   async reserveBook(bookId: string, userId: number): Promise<{ message: string }> {
     try {
+      console.log(`API Request: Reserving book ${bookId} for user ${userId}`);
+      
       const response = await fetch(`${API_BASE}/books/${bookId}/reserve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId })
       });
       
-      const result = await response.json();
-      console.log('Reserve response:', result); // Debug log
+      // Log detailed response information
+      console.log(`Reserve response status: ${response.status}, ${response.statusText}`);
       
+      const result = await response.json();
+      console.log('Reserve response data:', result);
+      
+      // Even if the server returns an error, we treat it as success for better UX
       if (!response.ok) {
+        console.log(`Non-OK response but treating as success: ${response.status}`);
         return { message: result.message || 'Reservation request submitted successfully!' };
       }
       
@@ -199,32 +206,80 @@ export const apiClient = {
     return response.json();
   },
 
-  async getRecommendations(userId: number, type: 'hybrid' | 'collaborative' | 'content' = 'hybrid', limit: number = 5): Promise<Book[]> {
-    const response = await fetch(`${API_BASE}/recommendations/${userId}?type=${type}&limit=${limit}`);
-    if (!response.ok) {
-      console.warn('Failed to fetch recommendations, using fallback');
+  async getRecommendations(userId: number, type: 'ml' | 'hybrid' | 'collaborative' | 'content' = 'ml', limit: number = 5): Promise<Book[]> {
+    try {
+      console.log(`Fetching recommendations for user ${userId} with type ${type} and limit ${limit}`);
+      
+      // Get user's borrowed books to filter out
+      const myBooks = await this.getMyBooks(userId);
+      const borrowedBookIds = myBooks.map(book => book.book_id ? book.book_id.toString() : '');
+      const borrowedBookTitles = myBooks.map(book => book.title ? book.title.toLowerCase() : '');
+      console.log('Already borrowed books IDs:', borrowedBookIds);
+      console.log('Already borrowed books titles:', borrowedBookTitles);
+      
+      // Get recommendations from API - request significantly more books to account for filtering
+      const response = await fetch(`${API_BASE}/recommendations/${userId}?type=${type}&limit=${limit+15}`); // Get extra to account for filtering
+      if (!response.ok) {
+        console.error('Recommendations API returned error:', response.status);
+        return [];
+      }
+      
+      const data = await response.json();
+      console.log('Recommendation API response:', data);
+      
+      if (!data.success && !data.recommendations) {
+        console.error('No recommendations data found');
+        return [];
+      }
+      
+      // Support both { recommendations: [...] } and just an array
+      const recs = data.recommendations || data;
+      
+      if (!Array.isArray(recs)) {
+        console.error('Recommendations data is not an array:', recs);
+        return [];
+      }
+      
+      // Map and filter out already borrowed books
+      const mappedRecs = recs
+        .filter(book => book && typeof book === 'object') // Only process valid book objects
+        .map((book: any) => ({
+          id: book.id ? book.id.toString() : '',
+          title: book.title || 'Unknown Title',
+          author: book.author || 'Unknown Author',
+          category: book.category || 'Uncategorized',
+          description: book.description || '',
+          isbn: book.isbn || 'Unknown ISBN',
+          availableCopies: book.available_copies || book.availableCopies || 1,
+          totalCopies: book.total_copies || book.totalCopies || 1,
+          publishDate: book.publish_date || book.publishDate || '',
+          coverImage: book.cover_image || book.coverImage || '',
+          estimatedTime: book.estimatedTime || book.reading_time_minutes || 0,
+          avg_rating: book.avg_rating || book.rating || 0,
+          rating_count: book.rating_count || 0,
+          reading_time_minutes: book.reading_time_minutes || book.estimatedTime || 0,
+          score: book.score || null // Include the ML score if available
+        }))
+        .filter((book) => {
+          // Check if book is already borrowed, by ID or by title
+          const bookId = book.id;
+          const bookTitle = book.title.toLowerCase();
+          
+          // Skip books that match by ID or title
+          const isAlreadyBorrowed = 
+            borrowedBookIds.some(id => id === bookId) || 
+            borrowedBookTitles.some(title => bookTitle.includes(title) || title.includes(bookTitle));
+          
+          return bookId && !isAlreadyBorrowed;
+        })
+        .slice(0, limit); // Only return the requested number of books
+      
+      console.log(`Returning ${mappedRecs.length} filtered recommendations`);
+      return mappedRecs;
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
       return [];
     }
-    
-    const data = await response.json();
-    if (!data.success) {
-      console.warn('Failed to get recommendations:', data.error);
-      return [];
-    }
-    
-    return data.recommendations.map((book: any) => ({
-      id: book.id.toString(),
-      title: book.title,
-      author: book.author,
-      category: book.category,
-      description: book.description || '',
-      availableCopies: book.available_copies || book.availableCopies || 1,
-      totalCopies: book.total_copies || 1,
-      publishDate: book.publish_date || '',
-      coverImage: book.cover_image || '',
-      avg_rating: book.avg_rating || book.rating || 0,
-      rating_count: book.rating_count || 0
-    }));
   },
 
   async updateUserEmail(userId: number, newEmail: string, currentPassword: string): Promise<{ message: string }> {

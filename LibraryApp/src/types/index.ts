@@ -23,6 +23,7 @@ export interface Book {
   estimatedTime?: number;
   coverImage?: string;
   reading_time_minutes?: number;
+  score?: number; // ML recommendation score
 }
 
 export interface IssuedBook {

@@ -286,10 +286,17 @@ class MLRecommendationService:
         # Get content-based recommendations
         content_recommendations = self.content_based_recommendations(user_id, n)
         
+        # Make sure scores are included and highlighted for verification
+        for rec in content_recommendations:
+            if 'score' not in rec:
+                rec['score'] = 0.0
+            
         # Get popular books
         popular_books = self.get_popular_books(n)
         
+        # Add a flag to verify these are ML recommendations
         return {
             'content_based': content_recommendations,
-            'popular': popular_books
+            'popular': popular_books,
+            'using_ml': True
         }
