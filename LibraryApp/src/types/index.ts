@@ -37,6 +37,13 @@ export interface IssuedBook {
   fine_amount: number;
   reading_time_minutes: number;
   reading_progress: number;
+  return_date?: string;
+  read_date?: string;
+}
+
+export interface HistoryItem extends IssuedBook {
+  is_overdue?: boolean;
+  completed_date?: string;
 }
 
 export interface Fine {

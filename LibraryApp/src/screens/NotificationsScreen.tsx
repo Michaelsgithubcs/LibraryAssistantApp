@@ -16,6 +16,8 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
 import { apiClient } from '../services/api';
+import { useDispatch } from 'react-redux';
+import { markAllAsRead } from '../store/slices/notificationSlice';
 
 interface NotificationsScreenProps {
   user: User;
@@ -27,6 +29,7 @@ interface NotificationsScreenProps {
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, navigation }) => {
   const { notifications, markAsRead, setNotifications } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     fetchNotifications();
@@ -36,13 +39,36 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   useFocusEffect(
     React.useCallback(() => {
       if (notifications.some(n => !n.read)) {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        // Use the Redux action directly to mark all as read in one operation
+        dispatch(markAllAsRead());
+        
+        // This will ensure the badge is also reset
+        const NotificationService = require('../services/NotificationService').default;
+        NotificationService.resetBadgeCount();
+        
+        console.log("Marked all notifications as read using Redux action");
       }
-    }, [notifications, setNotifications])
+    }, [notifications, dispatch])
+  );
+
+  // Reset badge count when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      // Import here to avoid circular dependency
+      const NotificationService = require('../services/NotificationService').default;
+      
+      // Reset badge count on app icon
+      NotificationService.resetBadgeCount();
+      
+      console.log('NotificationsScreen focused - resetting badge count');
+      
+    }, [])
   );
 
   const fetchNotifications = async () => {
     try {
+      console.log('Fetching notifications data...');
+      
       const [reservations, myBooks, fines, books] = await Promise.all([
         apiClient.getReservationStatus(user.id),
         apiClient.getMyBooks(user.id),
@@ -186,8 +212,25 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchNotifications();
-    setRefreshing(false);
+    try {
+      // Import notification service
+      const NotificationService = require('../services/NotificationService').default;
+      
+      // Reset badge count
+      NotificationService.resetBadgeCount();
+      
+      // Fetch latest notifications
+      await fetchNotifications();
+      
+      // Mark all notifications as read
+      dispatch(markAllAsRead());
+      
+      console.log("Notifications refreshed and marked as read");
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
 

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Book, IssuedBook, Fine, ReservationStatus } from '../types';
+import { Book, IssuedBook, User, ReservationStatus, Fine, HistoryItem } from '../types';
 
 // Change this to your computer's IP address when testing on physical device
 // For Android emulator: use 10.0.2.2
@@ -199,11 +199,29 @@ export const apiClient = {
   },
   
   async getReadHistory(userId: number): Promise<IssuedBook[]> {
-    const response = await fetch(`${API_BASE}/users/${userId}/history`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch read history');
+    try {
+      const response = await fetch(`${API_BASE}/user/${userId}/read-history`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch read history');
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching read history:', error);
+      return [];
     }
-    return response.json();
+  },
+  
+  async getAllUserHistory(userId: number): Promise<{success: boolean, history: HistoryItem[]}> {
+    try {
+      const response = await fetch(`${API_BASE}/users/${userId}/history`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch complete history');
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching complete history:', error);
+      return { success: false, history: [] };
+    }
   },
 
   async getRecommendations(userId: number, type: 'ml' | 'hybrid' | 'collaborative' | 'content' = 'ml', limit: number = 5): Promise<Book[]> {

@@ -36,6 +36,9 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   const [isTyping, setIsTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Create refs for message animations
+  const messageAnimations = useRef<{[key: string]: Animated.Value}>({})
 
   useEffect(() => {
     scrollToBottom();
@@ -141,13 +144,14 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
         style={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
       >
-        {(() => {
-          console.log('Rendering messages:', messages.length);
-          return null;
-        })()}
+        {/* Rendering messages: {messages.length} */}
         {messages.map((message, idx) => {
-          // Use a single translateX per message for swipe
-          const [translateX] = useState(new Animated.Value(0));
+          // Ensure we have an animation value for this message
+          if (!messageAnimations.current[message.id]) {
+            messageAnimations.current[message.id] = new Animated.Value(0);
+          }
+          // Get the animation value from the ref
+          const translateX = messageAnimations.current[message.id];
 
           const onGestureEvent = Animated.event(
             [{ nativeEvent: { translationX: translateX } }],
@@ -199,8 +203,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
                     ...styles.messageBubble,
                     ...(message.isUser ? styles.userBubble : styles.botBubble)
                   }}>
-                    {/* DEBUG: Message bubble rendered for message.id: */}
-                    {console.log('Rendering Card for', message.id)}
+                    {/* Rendering Card for {message.id} */}
                     {message.replyTo && (
                       <View style={{ marginBottom: 2, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: colors.primary, opacity: 0.7 }}>
                         <Text style={[commonStyles.textMuted, { fontSize: 12, fontStyle: 'italic' }]} numberOfLines={1}>
@@ -282,7 +285,12 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
               title="Send"
               onPress={sendMessage}
               disabled={!inputText.trim() || isTyping}
-              style={[styles.sendButton, { height: 40, minHeight: 40, paddingVertical: 0 }]}
+              style={{ 
+                ...styles.sendButton, 
+                height: 40, 
+                minHeight: 40, 
+                paddingVertical: 0 
+              }}
             />
           </View>
         </Card>

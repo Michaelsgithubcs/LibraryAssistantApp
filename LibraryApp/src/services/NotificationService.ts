@@ -99,36 +99,56 @@ class NotificationService {
     this.localNotification(title, message, data);
   };
 
-  // Legacy local notification
+  // Enhanced local notification
   localNotification = (title: string, message: string, data: { type?: string; [key: string]: any } = {}) => {
+    // Generate a unique ID for the notification
+    const notificationId = Date.now().toString();
+    
     // Create notification object matching NotificationBase
     const notification = {
-      id: Date.now().toString(),
+      id: notificationId,
       type: data.type || 'info', // Default to 'info' if type not provided
       title,
       message,
       timestamp: new Date().toISOString(),
-      data,
+      data: {
+        ...data,
+        notificationId // Include the ID in the data for tracking
+      },
     };
+    
+    console.log(`Creating notification: ${title} (${notificationId})`);
     
     // Add to Redux store for in-app notifications
     (store.dispatch as AppDispatch)(
       addNotification(notification)
     );
 
-    // Show system notification
-    PushNotification.localNotification({
-      channelId: 'library-notifications',
-      title,
-      message,
-      playSound: true,
-      soundName: 'default',
-      importance: 4, // HIGH
-      priority: 'high',
-      visibility: 'public',
-      vibrate: true,
-      ...data,
-    } as any); // Type assertion needed due to library type definitions
+    try {
+      // Show push notification with enhanced properties
+      PushNotification.localNotification({
+        channelId: 'library-notifications',
+        id: parseInt(notificationId.slice(-8), 10), // Use last 8 digits of ID as numeric ID
+        title,
+        message,
+        playSound: true,
+        soundName: 'default',
+        importance: 4, // HIGH
+        priority: 'high',
+        visibility: 'public',
+        vibrate: true,
+        badge: (store.getState().notifications?.unreadCount || 0) + 1, // Update badge count
+        userInfo: { 
+          notificationId,
+          ...data
+        }, // For iOS notification tracking
+        ...data,
+      } as any); // Type assertion needed due to library type definitions
+      
+      console.log(`Push notification sent: ${title} (${notificationId})`);
+    } catch (error) {
+      console.error('Error sending push notification:', error);
+    }
   };
 
   // Schedule a local notification
@@ -259,9 +279,22 @@ class NotificationService {
     // Cancel all scheduled notifications
     PushNotification.cancelAllLocalNotifications();
     
-    // Remove all delivered notifications (iOS)
+    // Remove all delivered notifications
+    PushNotification.removeAllDeliveredNotifications();
+    
+    // Remove all delivered notifications (iOS specific)
     if (Platform.OS === 'ios') {
       PushNotificationIOS.removeAllDeliveredNotifications();
+    }
+  };
+  
+  // Reset badge count
+  resetBadgeCount = () => {
+    if (Platform.OS === 'ios') {
+      PushNotificationIOS.setApplicationIconBadgeNumber(0);
+    } else {
+      // For Android
+      PushNotification.setApplicationIconBadgeNumber(0);
     }
   };
 

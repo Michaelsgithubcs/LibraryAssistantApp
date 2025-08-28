@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -6,15 +6,29 @@ import { Card } from '../components/Card';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
+import { useAuth } from '../hooks/useAuth';
 
 interface LoginScreenProps {
-  onLogin: (user: any) => void;
+  onLogin?: (user: any) => void;
+  navigation: any;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation }) => {
+  const { login: authLogin, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Check if user is already logged in
+  useEffect(() => {
+    if (user) {
+      console.log("User already logged in, redirecting to Main");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main' }]
+      });
+    }
+  }, [user, navigation]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -24,17 +38,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     setLoading(true);
     try {
-      const user = await apiClient.login(email, password);
+      const userData = await apiClient.login(email, password);
       
-      if (user.role !== 'user') {
+      if (userData.role !== 'user') {
         Alert.alert('Access Denied', 'This app is for library users only. Please use the web interface for admin access.');
+        setLoading(false);
         return;
       }
       
-      onLogin(user);
+      console.log("Login successful, setting auth state");
+      
+      // Set the user in auth context
+      await authLogin(userData);
+      
+      // Navigate immediately without waiting for effect
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Main' }]
+      });
+      
     } catch (error) {
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Invalid credentials');
-    } finally {
       setLoading(false);
     }
   };

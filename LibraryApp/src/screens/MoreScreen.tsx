@@ -69,7 +69,19 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ user, navigation }) => {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: logout }
+        { 
+          text: 'Logout', 
+          style: 'destructive', 
+          onPress: async () => {
+            await logout();
+            
+            // Force navigation reset after logout
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          }
+        }
       ]
     );
   };

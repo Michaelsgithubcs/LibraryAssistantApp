@@ -15,6 +15,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   unreadCount: number;
+  refreshNotifications: () => void;
 }
 
 export const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -68,17 +69,49 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
 
   // Initialize notification service
   useEffect(() => {
-    NotificationService.configure();
-    
-    // Set up notification handlers
-    NotificationService.setNotificationHandler((notification) => {
-      showNotification(notification.title, notification.message, notification.data);
-    });
-    
-    return () => {
-      NotificationService.cleanup();
-    };
-  }, [showNotification]);
+    // Initialize notification service
+    try {
+      NotificationService.configure();
+      
+      // Set up notification handlers for both in-app and push notifications
+      NotificationService.setNotificationHandler((notification) => {
+        console.log("Received notification:", notification);
+        showNotification(notification.title, notification.message, notification.data);
+      });
+      
+      // Check for unread notifications at regular intervals (every 5 minutes)
+      const checkInterval = setInterval(() => {
+        try {
+          // If there are unread notifications, refresh notification badge
+          if (unreadCount > 0) {
+            console.log(`Refreshing notification badge: ${unreadCount} unread notifications`);
+            // Force a re-render to ensure the badge is displayed
+            setNotifications(prevNotifications => [...prevNotifications]);
+          }
+        } catch (error) {
+          console.error("Error in notification check interval:", error);
+        }
+      }, 5 * 60 * 1000);
+      
+      return () => {
+        try {
+          NotificationService.cleanup();
+          clearInterval(checkInterval);
+        } catch (error) {
+          console.error("Error cleaning up notifications:", error);
+        }
+      };
+    } catch (error) {
+      console.error("Error initializing notification service:", error);
+      return () => {}; // Empty cleanup function in case of error
+    }
+  }, [showNotification, unreadCount]);
+
+  // Function to refresh the notification state
+  const refreshNotifications = useCallback(() => {
+    console.log("Manually refreshing notifications state");
+    setNotifications([...reduxNotifications]);
+  }, [reduxNotifications]);
 
   const contextValue = {
     showNotification,
@@ -86,7 +119,8 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
     notifications,
     markAsRead,
     setNotifications,
-    unreadCount
+    unreadCount,
+    refreshNotifications
   };
 
   return (

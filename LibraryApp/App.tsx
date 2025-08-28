@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar, Text, View, TouchableOpacity } from 'react-native';
+import { StatusBar, Text, View, TouchableOpacity, AppState } from 'react-native';
 import HomeIcon from './assets/icons/home.svg';
 import HomeIconFilled from './assets/icons/home-clicked.svg';
 import BooksIcon from './assets/icons/book.svg';
@@ -18,7 +18,7 @@ import { Provider } from 'react-redux';
 import { store } from './src/store';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { useNotifications } from './src/components/NotificationProvider';
+import { useNotifications, NotificationContext } from './src/components/NotificationProvider';
 import NotificationProvider from './src/components/NotificationProvider';
 
 // Define LoginScreen props type
@@ -188,7 +188,7 @@ const TabNavigator = ({ user }: { user: any }) => {
           tabBarIcon: ({ size, focused }) => {
             const { unreadCount } = useNotifications();
             return (
-              <View style={{ alignItems: 'center' }}>
+              <View style={{ alignItems: 'center', position: 'relative' }}>
                 {focused ? (
                   <BellIconFilled width={size ?? 24} height={size ?? 24} />
                 ) : (
@@ -197,14 +197,20 @@ const TabNavigator = ({ user }: { user: any }) => {
                 {unreadCount > 0 && (
                   <View style={{
                     position: 'absolute',
-                    top: 2,
-                    right: -2,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: colors.primary,
+                    top: -2,
+                    right: -4,
+                    width: 12,
+                    height: 12,
+                    borderRadius: 6,
+                    backgroundColor: 'red',
                     borderWidth: 1,
                     borderColor: colors.surface,
+                    // Add a small shadow for better visibility
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 1,
+                    elevation: 2,
                   }} />
                 )}
               </View>
@@ -236,11 +242,17 @@ const TabNavigator = ({ user }: { user: any }) => {
   );
 };
 
+// Removed NotificationManager component - moved logic directly to AppContent
+
 const MainNavigator = ({ user }: { user: any }) => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.primary },
+        headerStyle: {
+          backgroundColor: colors.primary,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         headerTintColor: colors.text.inverse,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
@@ -291,8 +303,59 @@ const MainNavigator = ({ user }: { user: any }) => {
 };
 
 const AppContent = () => {
-  const { user, loading } = useAuth();
+  // Force re-render when auth state changes by using a unique key
+  const [navigationKey, setNavigationKey] = React.useState(Date.now().toString());
+  const { user, loading, authStateVersion } = useAuth();
   const [isNotificationVisible, setIsNotificationVisible] = React.useState(false);
+  
+  // Track previous auth state to detect changes
+  const prevUserRef = React.useRef(user);
+  
+  React.useEffect(() => {
+    if (prevUserRef.current !== user) {
+      console.log('User state changed:', user ? 'Logged in' : 'Logged out');
+      prevUserRef.current = user;
+    }
+  }, [user]);
+  
+  // Create a ref to hold the notification service
+  const notificationServiceRef = React.useRef<any>(null);
+  
+  // Update the navigation key when auth state changes
+  React.useEffect(() => {
+    // Generate a new key whenever the auth state version changes
+    // This will force the NavigationContainer to re-mount
+    setNavigationKey(Date.now().toString());
+    
+    // Log the auth state change to help with debugging
+    console.log('Auth state changed:', { 
+      isLoggedIn: !!user, 
+      version: authStateVersion 
+    });
+  }, [authStateVersion, user]);
+  
+  // Handle app state changes directly without using notification context
+  React.useEffect(() => {
+    // Import notification service directly to avoid circular dependencies
+    const NotificationService = require('./src/services/NotificationService').default;
+    notificationServiceRef.current = NotificationService;
+    
+    // Reset badge count on app startup
+    NotificationService.resetBadgeCount();
+    
+    // Add AppState listener
+    const appStateSubscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        console.log('App came to foreground, resetting notification badges');
+        NotificationService.resetBadgeCount();
+      }
+    });
+    
+    // Clean up on unmount
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -304,29 +367,21 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer>
+      <NavigationContainer key={navigationKey}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {user ? (
-            <Stack.Screen 
-              name="Main" 
-              children={() => <MainNavigator user={user} />}
-              options={{
-                headerShown: false
-              }}
-            />
-          ) : (
-            <Stack.Screen name="Login">
-              {() => (
-                <LoginScreen 
-                  onLogin={(user) => {
-                    // Handle login logic here
-                    console.log('Login attempt with user:', user);
-                  }} 
-                />
-              )}
-            </Stack.Screen>
-          )}
+          <Stack.Screen 
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="Main" 
+            children={() => <MainNavigator user={user} />}
+            options={{
+              headerShown: false
+            }}
+          />
         </Stack.Navigator>
         
         {/* Notification Modal */}

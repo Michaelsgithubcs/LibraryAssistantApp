@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -7,7 +7,7 @@ import { ProgressBar } from '../components/ProgressBar';
 import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
-import { User, IssuedBook, ReservationStatus } from '../types';
+import { User, IssuedBook, ReservationStatus, HistoryItem } from '../types';
 
 interface BorrowedBooksScreenProps {
   user: User;
@@ -17,7 +17,9 @@ interface BorrowedBooksScreenProps {
 export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, navigation }) => {
   const [myBooks, setMyBooks] = useState<IssuedBook[]>([]);
   const [reservations, setReservations] = useState<ReservationStatus[]>([]);
-  const [readHistory, setReadHistory] = useState<IssuedBook[]>([]);
+  const [readHistory, setReadHistory] = useState<HistoryItem[]>([]);
+  const [returnedBooks, setReturnedBooks] = useState<HistoryItem[]>([]);
+  const [activeTab, setActiveTab] = useState<'borrowed' | 'returned' | 'read'>('borrowed');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -36,15 +38,35 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
 
   const fetchData = async () => {
     try {
-      const [booksData, reservationsData, historyData] = await Promise.all([
+      // Fetch all book data, including borrowed, returned and read books
+      const [issuedAndReturnedBooks, reservationsData, readBooksHistory] = await Promise.all([
         apiClient.getMyBooks(user.id),
         apiClient.getReservationStatus(user.id),
         apiClient.getReadHistory(user.id)
       ]);
-      setMyBooks(booksData);
-      setReservations(reservationsData);
-      setReadHistory(historyData || []);
+      
+      // Get a complete history from the /users/:id/history endpoint
+      const historyResponse = await apiClient.getAllUserHistory(user.id);
+      const completeHistory = historyResponse.history || [];
+      
+      // Current borrowed books
+      setMyBooks(issuedAndReturnedBooks.filter(book => book.status === 'issued'));
+      
+      // Books that have been returned but not necessarily marked as read
+      // Using the complete history to get returned books
+      setReturnedBooks(completeHistory.filter((book: HistoryItem) =>
+        book.status === 'returned' && 
+        (!book.reading_progress || book.reading_progress < 100)
+      ));      setReservations(reservationsData);
+      
+      // Books that have been explicitly marked as read (100% progress)
+      setReadHistory(readBooksHistory || []);
+      
+      console.log(`Loaded ${issuedAndReturnedBooks.length} books: ${issuedAndReturnedBooks.filter(book => book.status === 'issued').length} borrowed`);
+      console.log(`Loaded ${completeHistory.filter((book: HistoryItem) => book.status === 'returned').length} returned books`);
+      console.log(`Loaded ${readBooksHistory?.length || 0} books in read history`);
     } catch (error) {
+      console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load your books');
     } finally {
       setLoading(false);
@@ -154,77 +176,160 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
         </Card>
       )}
 
-      {/* Reading History (includes currently borrowed books) */}
+      {/* Book History with Tabs */}
       <Card>
-        <Text style={commonStyles.subtitle}>All Borrowed Books & History</Text>
-        <Text style={commonStyles.textSecondary}>This section includes your current and past borrowed books.</Text>
-
-        {myBooks.length > 0 && (
+        <Text style={commonStyles.subtitle}>Book History</Text>
+        <Text style={commonStyles.textSecondary}>View your current and past borrowed books</Text>
+        
+        {/* Tabs for navigation between book states */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'borrowed' && styles.activeTab]} 
+            onPress={() => setActiveTab('borrowed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'borrowed' && styles.activeTabText]}>
+              Borrowed{myBooks.length > 0 ? ` (${myBooks.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'returned' && styles.activeTab]} 
+            onPress={() => setActiveTab('returned')}
+          >
+            <Text style={[styles.tabText, activeTab === 'returned' && styles.activeTabText]}>
+              Returned{returnedBooks.length > 0 ? ` (${returnedBooks.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'read' && styles.activeTab]} 
+            onPress={() => setActiveTab('read')}
+          >
+            <Text style={[styles.tabText, activeTab === 'read' && styles.activeTabText]}>
+              Read{readHistory.length > 0 ? ` (${readHistory.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Currently Borrowed Books */}
+        {activeTab === 'borrowed' && (
           <View>
-            <Text style={[commonStyles.text, { fontWeight: 'bold', marginTop: 12 }]}>Currently Borrowed</Text>
-            {myBooks.map((book) => (
-              <View key={`borrowed-${book.id}`} style={styles.historyItem}>
-                <View style={styles.bookHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={commonStyles.subtitle}>{book.title}</Text>
-                    <Text style={commonStyles.textSecondary}>{book.author}</Text>
+            {myBooks.length > 0 ? (
+              myBooks.map((book) => (
+                <View key={`borrowed-${book.id}`} style={styles.historyItem}>
+                  <View style={styles.bookHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={commonStyles.subtitle}>{book.title}</Text>
+                      <Text style={commonStyles.textSecondary}>{book.author}</Text>
+                    </View>
+                    <Text 
+                      style={[
+                        commonStyles.textMuted, 
+                        { fontSize: 12 },
+                        isOverdue(book.due_date) && styles.overdueText
+                      ]}
+                    >
+                      Due: {book.due_date ? formatDate(book.due_date) : 'Unknown'}
+                    </Text>
                   </View>
-                  <Text style={[commonStyles.textMuted, { fontSize: 12 }]}>Due: {book.due_date ? new Date(book.due_date).toLocaleDateString() : 'Unknown'}</Text>
+                  <View style={styles.bookActions}>
+                    <Button
+                      title="Ask About Book"
+                      onPress={() => navigation.navigate('BookChat', { book })}
+                      variant="outline"
+                      style={styles.actionButton}
+                    />
+                    {(book.reading_progress || 0) < 100 && (
+                      <Button
+                        title="Mark as Read"
+                        onPress={() => handleMarkAsRead(book)}
+                        style={styles.actionButton}
+                      />
+                    )}
+                  </View>
                 </View>
-                <View style={styles.bookActions}>
-                  <Button
-                    title="Ask About Book"
-                    onPress={() => navigation.navigate('BookChat', { book })}
-                    variant="outline"
-                    style={styles.actionButton}
-                  />
-                  {(book.reading_progress || 0) < 100 && (
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={commonStyles.textSecondary}>No books currently borrowed</Text>
+                <Button
+                  title="Browse Books"
+                  onPress={() => navigation.navigate('MyBooks')}
+                  style={styles.emptyButton}
+                />
+              </View>
+            )}
+          </View>
+        )}
+        
+        {/* Returned Books */}
+        {activeTab === 'returned' && (
+          <View>
+            {returnedBooks.length > 0 ? (
+              returnedBooks.map((book) => (
+                <View key={`returned-${book.id}`} style={styles.historyItem}>
+                  <View style={styles.bookHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={commonStyles.subtitle}>{book.title}</Text>
+                      <Text style={commonStyles.textSecondary}>{book.author}</Text>
+                    </View>
+                    <Text style={[commonStyles.textMuted, { fontSize: 12 }]}>
+                      Returned: {book.return_date ? formatDate(book.return_date) : 'Recently'}
+                    </Text>
+                  </View>
+                  <View style={styles.bookActions}>
+                    <Button
+                      title="Ask About Book"
+                      onPress={() => navigation.navigate('BookChat', { book })}
+                      variant="outline"
+                      style={styles.actionButton}
+                    />
                     <Button
                       title="Mark as Read"
                       onPress={() => handleMarkAsRead(book)}
                       style={styles.actionButton}
                     />
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {readHistory.length > 0 && (
-          <View>
-            <Text style={[commonStyles.text, { fontWeight: 'bold', marginTop: 20 }]}>Completed Books</Text>
-            {readHistory.map((book) => (
-              <View key={`history-${book.id}`} style={styles.historyItem}>
-                <View style={styles.bookHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={commonStyles.subtitle}>{book.title}</Text>
-                    <Text style={commonStyles.textSecondary}>{book.author}</Text>
                   </View>
-                  <Text style={[commonStyles.textMuted, { fontSize: 12 }]}>Completed: Recently</Text>
                 </View>
-                <View style={styles.bookActions}>
-                  <Button
-                    title="Ask About Book"
-                    onPress={() => navigation.navigate('BookChat', { book })}
-                    variant="outline"
-                    style={styles.actionButton}
-                  />
-                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={commonStyles.textSecondary}>No returned books in your history</Text>
+                <Text style={commonStyles.textMuted}>Books you've returned but not marked as read will appear here</Text>
               </View>
-            ))}
+            )}
           </View>
         )}
-
-        {myBooks.length === 0 && readHistory.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={commonStyles.textSecondary}>No books in your history yet</Text>
-            <Text style={commonStyles.textMuted}>Books you borrow or mark as read will appear here</Text>
-            <Button
-              title="Browse Books"
-              onPress={() => navigation.navigate('MyBooks')}
-              style={styles.emptyButton}
-            />
+        
+        {/* Read Books History */}
+        {activeTab === 'read' && (
+          <View>
+            {readHistory.length > 0 ? (
+              readHistory.map((book) => (
+                <View key={`history-${book.id}`} style={styles.historyItem}>
+                  <View style={styles.bookHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={commonStyles.subtitle}>{book.title}</Text>
+                      <Text style={commonStyles.textSecondary}>{book.author}</Text>
+                    </View>
+                    <Text style={[commonStyles.textMuted, { fontSize: 12 }]}>
+                      Completed: {book.completed_date ? formatDate(book.completed_date) : 'Recently'}
+                    </Text>
+                  </View>
+                  <View style={styles.bookActions}>
+                    <Button
+                      title="Ask About Book"
+                      onPress={() => navigation.navigate('BookChat', { book })}
+                      variant="outline"
+                      style={styles.actionButton}
+                    />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={commonStyles.textSecondary}>No completed books yet</Text>
+                <Text style={commonStyles.textMuted}>Books you mark as read will appear here</Text>
+              </View>
+            )}
           </View>
         )}
       </Card>
@@ -293,5 +398,42 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  
+  // Tab navigation styles
+  tabContainer: {
+    flexDirection: 'row',
+    marginVertical: 16,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  activeTab: {
+    backgroundColor: colors.primary,
+    borderRadius: 6,
+  },
+  
+  tabText: {
+    fontSize: 14,
+    color: colors.text.primary,
+  },
+  
+  activeTabText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  
+  overdueText: {
+    color: colors.danger,
+    fontWeight: '600',
   },
 });
