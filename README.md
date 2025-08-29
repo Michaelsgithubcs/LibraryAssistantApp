@@ -312,7 +312,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📧 Contact
 
-For questions or support, please email [support@libraryapp.com](mailto:support@libraryapp.com)
+For questions or support, please email [support@libraryapp.com](mikendlovumx@gmail.com)
 
 ---
 
