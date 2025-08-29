@@ -193,7 +193,64 @@ npx react-native run-ios  # For iOS
 npx react-native run-android  # For Android
 ```
 
-## 📱 App Features in Detail
+## � Project Structure
+
+```
+LibraryAssistantApp/
+├── src/
+│   ├── components/
+│   │   ├── AdminBookUpload.tsx
+│   │   ├── AdminDashboard.tsx
+│   │   ├── BookChatbot.tsx
+│   │   ├── BookIssuing.tsx
+│   │   ├── BookRequests.tsx
+│   │   ├── BookSearch.tsx
+│   │   ├── EbookStore.tsx
+│   │   ├── EnhancedMemberManagement.tsx
+│   │   ├── FinesManagement.tsx
+│   │   ├── IssueReturn.tsx
+│   │   ├── LibraryChatbot.tsx
+│   │   ├── Login.tsx
+│   │   ├── MemberManagement.tsx
+│   │   ├── MyBooks.tsx
+│   │   └── UserDashboard.tsx
+│   ├── pages/
+│   │   ├── Index.tsx
+│   │   └── NotFound.tsx
+│   ├── hooks/
+│   │   ├── use-mobile.tsx
+│   │   └── use-toast.ts
+│   └── lib/
+│       ├── api.ts
+│       └── utils.ts
+├── backend/
+│   ├── app.py                      # Main Flask application
+│   ├── recommendation_service.py   # ML-based recommendation engine
+│   ├── populate_db.py              # Database initialization script
+│   ├── schema.sql                  # Database schema
+│   └── requirements.txt            # Python dependencies
+├── LibraryApp/                     # Mobile app (React Native)
+│   ├── App.tsx                     # Main app component
+│   ├── src/
+│   │   ├── components/             # Reusable UI components
+│   │   ├── context/                # React Context providers
+│   │   ├── hooks/                  # Custom React hooks
+│   │   ├── screens/                # App screens
+│   │   │   ├── BookChatScreen.tsx  # Book discussion AI
+│   │   │   └── NotificationsScreen.tsx
+│   │   ├── services/               # API services
+│   │   └── store/                  # State management
+│   ├── ios/                        # iOS-specific files
+│   └── android/                    # Android-specific files
+└── public/                         # Static assets
+    ├── books.png
+    ├── home.png
+    ├── more.png
+    ├── notifications.png
+    └── store.png
+```
+
+## �📱 App Features in Detail
 
 ### Authentication
 - Secure login/logout functionality
