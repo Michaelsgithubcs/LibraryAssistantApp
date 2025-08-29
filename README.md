@@ -149,6 +149,10 @@ The LibraryApp features a sophisticated recommendation engine powered by multipl
 - `POST /api/admin/members/<id>/suspend` - Suspend a member
 - `POST /api/admin/members/<id>/unsuspend` - Reinstate a suspended member
 
+### Admin Web Interface Screenshots
+<img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 20" src="https://github.com/user-attachments/assets/c66c64f5-97be-4cff-a64a-77e530ee4a83" />
+<img width="1470" height="956" alt="Screenshot 2025-08-25 at 10 50 30" src="https://github.com/user-attachments/assets/435644f4-3e9a-4184-b4bc-c429513c5d72" />
+
 ## 🚀 Getting Started
 
 ### Prerequisites
