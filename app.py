@@ -1360,7 +1360,7 @@ def ai_book_assistant():
     
     try:
         # Initialize the model
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-pro')
         
         # Create a chat session
         chat = model.start_chat(history=[])
@@ -1526,7 +1526,7 @@ def ai_book_assistant_v2():
             )
 
             print("Sending request to Gemini API...")
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-pro')
             response = model.generate_content([
                 {"role": "user", "parts": [system_prompt]},
                 {"role": "user", "parts": [user_prompt]},
