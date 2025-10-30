@@ -1360,7 +1360,7 @@ def ai_book_assistant():
     
     try:
         # Initialize the model
-        model = genai.GenerativeModel('models/gemini-1.5-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Create a chat session
         chat = model.start_chat(history=[])
@@ -1526,7 +1526,7 @@ def ai_book_assistant_v2():
             )
 
             print("Sending request to Gemini API...")
-            model = genai.GenerativeModel('models/gemini-1.5-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             # Combine prompts into one message
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
