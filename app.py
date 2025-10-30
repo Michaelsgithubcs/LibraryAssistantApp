@@ -1526,7 +1526,7 @@ def ai_book_assistant_v2():
             )
 
             print("Sending request to Gemini API...")
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-pro')
             response = model.generate_content([
                 {"role": "user", "parts": [system_prompt]},
                 {"role": "user", "parts": [user_prompt]},
