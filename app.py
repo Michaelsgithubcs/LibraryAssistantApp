@@ -1527,10 +1527,10 @@ def ai_book_assistant_v2():
 
             print("Sending request to Gemini API...")
             model = genai.GenerativeModel('gemini-1.5-pro')
-            response = model.generate_content([
-                {"role": "user", "parts": [system_prompt]},
-                {"role": "user", "parts": [user_prompt]},
-            ])
+            
+            # Combine prompts into one message
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            response = model.generate_content(full_prompt)
             print("Received response from Gemini API")
 
             text = response.text if hasattr(response, 'text') else str(response)
