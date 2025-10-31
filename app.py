@@ -1359,24 +1359,27 @@ def ai_book_assistant():
     user_message = data.get('message', '')
     
     try:
-        # Initialize the model
-        model = genai.GenerativeModel('gemini-pro')
+        import requests as req
         
-        # Create a chat session
-        chat = model.start_chat(history=[])
+        # Use REST API directly with gemini-2.0-flash (available model)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GENAI_API_KEY}"
         
-        # Prepare the prompt
-        prompt = f"""You are a helpful library assistant. Answer the following question about books or library services in a friendly and informative way.
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": f"You are a helpful library assistant. Answer the following question about books or library services in a friendly and informative way.\n\nUser: {user_message}\n\nAssistant:"
+                }]
+            }]
+        }
         
-        User: {user_message}
+        api_response = req.post(url, json=payload)
+        api_response.raise_for_status()
+        result = api_response.json()
         
-        Assistant:"""
-        
-        # Get the response
-        response = chat.send_message(prompt)
+        response_text = result['candidates'][0]['content']['parts'][0]['text']
         
         return jsonify({
-            'response': response.text,
+            'response': response_text,
             'sources': []
         })
         
@@ -1526,14 +1529,24 @@ def ai_book_assistant_v2():
             )
 
             print("Sending request to Gemini API...")
-            model = genai.GenerativeModel('gemini-pro')
+            import requests as req
             
-            # Combine prompts into one message
+            # Use REST API directly with gemini-2.0-flash (available model)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+            
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            response = model.generate_content(full_prompt)
+            payload = {
+                "contents": [{
+                    "parts": [{"text": full_prompt}]
+                }]
+            }
+            
+            api_response = req.post(url, json=payload)
+            api_response.raise_for_status()
+            result = api_response.json()
+            
+            text = result['candidates'][0]['content']['parts'][0]['text']
             print("Received response from Gemini API")
-
-            text = response.text if hasattr(response, 'text') else str(response)
             print(f"Response text length: {len(text) if text else 0} characters")
             
             if not text or len(text.strip()) == 0:
