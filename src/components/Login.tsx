@@ -5,13 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, User, Lock, Mail } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface LoginProps {
   onLogin: (user: { id: number; username: string; role: string }) => void;
 }
-
-// Use environment variable for API URL, fallback to production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://libraryassistantapp.onrender.com/api';
 
 export const Login = ({ onLogin }: LoginProps) => {
   const [loginData, setLoginData] = useState({ username: "", password: "" });
