@@ -10,12 +10,13 @@ interface LoginProps {
   onLogin: (user: { id: number; username: string; role: string }) => void;
 }
 
+// Use environment variable for API URL, fallback to production
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://libraryassistantapp.onrender.com/api';
+
 export const Login = ({ onLogin }: LoginProps) => {
   const [loginData, setLoginData] = useState({ username: "", password: "" });
   const [signupData, setSignupData] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
-
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://libraryassistantapp.onrender.com/api';
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
