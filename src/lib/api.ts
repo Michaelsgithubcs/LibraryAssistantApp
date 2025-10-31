@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use environment variable for API URL, fallback to production
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://libraryassistantapp.onrender.com/api';
 
 export interface Book {
   id: number;
