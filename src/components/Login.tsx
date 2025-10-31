@@ -15,12 +15,14 @@ export const Login = ({ onLogin }: LoginProps) => {
   const [signupData, setSignupData] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://libraryassistantapp.onrender.com/api';
+  
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      const response = await fetch("http://localhost:5001/api/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(loginData),
@@ -59,7 +61,7 @@ export const Login = ({ onLogin }: LoginProps) => {
     setLoading(true);
     
     try {
-      const response = await fetch("http://localhost:5001/api/auth/signup", {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
