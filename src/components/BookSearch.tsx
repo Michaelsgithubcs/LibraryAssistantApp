@@ -59,7 +59,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
 
   const fetchBooks = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/books');
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/books');
       if (response.ok) {
         const data = await response.json();
         const formattedBooks = data.map(book => ({
@@ -83,7 +83,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/users');
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/users');
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -108,7 +108,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
     if (!editingBook) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/books/${editingBook.id}`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/books/${editingBook.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +139,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
     if (!confirm('Are you sure you want to delete this book?')) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/books/${bookId}`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/books/${bookId}`, {
         method: 'DELETE'
       });
       
@@ -159,7 +159,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
     if (!issuingBook || !selectedUser || !dueDate) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/books/${issuingBook.id}/issue`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/books/${issuingBook.id}/issue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -187,7 +187,7 @@ export const BookSearch = ({ user }: BookSearchProps) => {
 
   const reserveBook = async (bookId: string) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/books/${bookId}/reserve`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/books/${bookId}/reserve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id })

@@ -35,7 +35,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin/reservation-requests');
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/reservation-requests');
       if (response.ok) {
         const data = await response.json();
         setRequests(data);
@@ -48,7 +48,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
 
   const handleApprove = async (requestId: number) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/reservation-requests/${requestId}/approve`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/reservation-requests/${requestId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admin_id: user.id })
@@ -70,7 +70,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
     if (!rejectingRequest || !rejectionReason.trim()) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/reservation-requests/${rejectingRequest}/reject`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/reservation-requests/${rejectingRequest}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectionReason })

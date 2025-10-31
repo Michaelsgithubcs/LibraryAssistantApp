@@ -23,7 +23,7 @@ export const MyBooks = ({ user }: MyBooksProps) => {
 
   const fetchMyBooks = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/user/${user.id}/issued-books`);
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/issued-books`);
       if (response.ok) {
         const data = await response.json();
         setMyBooks(data);
@@ -35,7 +35,7 @@ export const MyBooks = ({ user }: MyBooksProps) => {
 
   const fetchReservationStatus = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/user/${user.id}/reservations`);
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/reservations`);
       if (response.ok) {
         const data = await response.json();
         setReservationStatus(data);
@@ -53,7 +53,7 @@ export const MyBooks = ({ user }: MyBooksProps) => {
 
   const markAsRead = async (bookId: string) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/user/${user.id}/books/${bookId}/mark-read`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/books/${bookId}/mark-read`, {
         method: 'POST'
       });
       if (response.ok) {

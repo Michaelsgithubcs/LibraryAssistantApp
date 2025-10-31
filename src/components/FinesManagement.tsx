@@ -35,8 +35,8 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
   const fetchFines = async () => {
     try {
       const endpoint = user.role === 'admin' 
-        ? 'http://localhost:5001/api/admin/fines'
-        : `http://localhost:5001/api/user/${user.id}/fines`;
+        ? 'https://libraryassistantapp.onrender.com/api/admin/fines'
+        : `https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`;
       
       const response = await fetch(endpoint);
       if (response.ok) {
@@ -60,7 +60,7 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
 
   const handlePayDamage = async (fineId: string) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/fines/${fineId}/pay-damage`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-damage`, {
         method: 'POST'
       });
       
@@ -77,7 +77,7 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
 
   const handlePayOverdue = async (fineId: string) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/fines/${fineId}/pay-overdue`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-overdue`, {
         method: 'POST'
       });
       

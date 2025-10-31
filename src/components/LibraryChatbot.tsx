@@ -40,9 +40,9 @@ export const LibraryChatbot = ({ user }: LibraryChatbotProps) => {
   const fetchLibraryData = async () => {
     try {
       const [booksRes, userBooksRes, finesRes] = await Promise.all([
-        fetch('http://localhost:5001/api/books'),
-        user ? fetch(`http://localhost:5001/api/user/${user.id}/issued-books`) : Promise.resolve({ ok: false }),
-        user ? fetch(`http://localhost:5001/api/user/${user.id}/fines`) : Promise.resolve({ ok: false })
+        fetch('https://libraryassistantapp.onrender.com/api/books'),
+        user ? fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/issued-books`) : Promise.resolve({ ok: false }),
+        user ? fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`) : Promise.resolve({ ok: false })
       ]);
       
       const books = booksRes.ok ? await booksRes.json() : [];

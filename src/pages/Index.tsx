@@ -34,7 +34,7 @@ const Index = () => {
   const fetchRequestCount = async () => {
     if (currentUser?.role === 'admin') {
       try {
-        const response = await fetch('http://localhost:5001/api/admin/reservation-requests/count');
+        const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/reservation-requests/count');
         if (response.ok) {
           const data = await response.json();
           setRequestCount(data.count);
@@ -49,7 +49,7 @@ const Index = () => {
   const fetchUserReservationStatus = async () => {
     if (currentUser?.role === 'user') {
       try {
-        const response = await fetch(`http://localhost:5001/api/user-reservations/${currentUser.id}`);
+        const response = await fetch(`https://libraryassistantapp.onrender.com/api/user-reservations/${currentUser.id}`);
         if (response.ok) {
           const data = await response.json();
           const hasApproved = data.some((req: any) => req.status === 'approved');
@@ -79,7 +79,7 @@ const Index = () => {
     }
     if (currentView === 'mybooks' && currentUser?.role === 'user') {
       // Mark reservations as viewed
-      fetch(`http://localhost:5001/api/user-reservations/${currentUser.id}/mark-viewed`, {
+      fetch(`https://libraryassistantapp.onrender.com/api/user-reservations/${currentUser.id}/mark-viewed`, {
         method: 'POST'
       }).then(() => {
         setUserReservationStatus({ hasApproved: false, hasRejected: false });

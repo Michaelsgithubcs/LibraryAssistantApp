@@ -36,7 +36,7 @@ export const EnhancedMemberManagement = () => {
 
   const fetchMembers = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin/members');
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/members');
       const data = await response.json();
       setMembers(data);
     } catch (error) {
@@ -53,7 +53,7 @@ export const EnhancedMemberManagement = () => {
 
   const addMember = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/auth/signup', {
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMember)
@@ -76,7 +76,7 @@ export const EnhancedMemberManagement = () => {
     if (!selectedMember) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/members/${selectedMember.id}`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/members/${selectedMember.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editMember)
@@ -98,7 +98,7 @@ export const EnhancedMemberManagement = () => {
     if (!selectedMember) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/members/${selectedMember.id}/suspend`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/members/${selectedMember.id}/suspend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration: suspendDuration })
@@ -118,7 +118,7 @@ export const EnhancedMemberManagement = () => {
 
   const unsuspendMember = async (memberId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/members/${memberId}/unsuspend`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/members/${memberId}/unsuspend`, {
         method: 'POST'
       });
       
@@ -137,7 +137,7 @@ export const EnhancedMemberManagement = () => {
     if (!confirm('Are you sure you want to delete this member?')) return;
     
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/members/${memberId}`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/members/${memberId}`, {
         method: 'DELETE'
       });
       

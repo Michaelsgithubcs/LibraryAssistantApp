@@ -23,7 +23,7 @@ export const IssueReturn = () => {
 
   const fetchIssuedBooks = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin/issued-books');
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/issued-books');
       if (response.ok) {
         const data = await response.json();
         setIssuedBooks(data);
@@ -36,7 +36,7 @@ export const IssueReturn = () => {
 
   const markAsReturned = async (issueId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/issues/${issueId}/return`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/issues/${issueId}/return`, {
         method: 'POST'
       });
       
@@ -53,7 +53,7 @@ export const IssueReturn = () => {
 
   const reportDamage = async () => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/issues/${selectedIssue.id}/damage`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/issues/${selectedIssue.id}/damage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

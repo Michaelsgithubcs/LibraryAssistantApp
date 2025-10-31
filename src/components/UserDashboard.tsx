@@ -37,7 +37,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
   const fetchSuggestions = async () => {
     try {
       // First, try to fetch ML-powered recommendations for the user
-      const response = await fetch(`http://localhost:5001/api/recommendations/${user.id}?type=ml&limit=5`);
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/recommendations/${user.id}?type=ml&limit=5`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.recommendations && data.recommendations.length > 0) {
@@ -55,7 +55,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
       
       // If ML recommendations fail or are empty, fall back to regular books
       try {
-        const booksResponse = await fetch('http://localhost:5001/api/books');
+        const booksResponse = await fetch('https://libraryassistantapp.onrender.com/api/books');
         if (booksResponse.ok) {
           const booksData = await booksResponse.json();
           // Filter out books that the user might already have
@@ -83,9 +83,9 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
   const fetchUserStats = async () => {
     try {
       const [overdueRes, finesRes, reservationsRes] = await Promise.all([
-        fetch(`http://localhost:5001/api/user/${user.id}/overdue-books`),
-        fetch(`http://localhost:5001/api/user/${user.id}/fines`),
-        fetch(`http://localhost:5001/api/user/${user.id}/reservations`)
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/overdue-books`),
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`),
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/reservations`)
       ]);
       
       const overdueData = overdueRes.ok ? await overdueRes.json() : [];
@@ -106,7 +106,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
 
   const reserveBook = async (bookId) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/books/${bookId}/reserve`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/books/${bookId}/reserve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id })
