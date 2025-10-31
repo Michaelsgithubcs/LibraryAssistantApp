@@ -40,8 +40,8 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
   const fetchFines = async () => {
     try {
       const endpoint = user.role === 'admin' 
-        ? 'http://10.0.2.2:5001/api/admin/fines'
-        : `http://10.0.2.2:5001/api/user/${user.id}/fines`;
+        ? 'https://libraryassistantapp.onrender.com/api/admin/fines'
+        : `https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`;
       
       const response = await fetch(endpoint);
       if (response.ok) {
@@ -71,7 +71,7 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
 
   const handlePayDamage = async (fineId: string) => {
     try {
-      const response = await fetch(`http://10.0.2.2:5001/api/admin/fines/${fineId}/pay-damage`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-damage`, {
         method: 'POST'
       });
       
@@ -88,7 +88,7 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
 
   const handlePayOverdue = async (fineId: string) => {
     try {
-      const response = await fetch(`http://10.0.2.2:5001/api/admin/fines/${fineId}/pay-overdue`, {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-overdue`, {
         method: 'POST'
       });
       
