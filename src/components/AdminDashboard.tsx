@@ -43,13 +43,22 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       
       const activeMembers = members.filter(m => m.status === 'active').length;
       
+      // Calculate new members in the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const newMembers = members.filter(m => {
+        if (!m.created_at) return false;
+        const createdDate = new Date(m.created_at);
+        return createdDate >= thirtyDaysAgo;
+      }).length;
+      
       setStats({
         totalBooks: books.length,
         availableBooks: books.filter(b => b.available_copies > 0).length,
         activeMembers: activeMembers,
         overdueBooks: overdueData.count,
         totalFines: finesData.amount,
-        newMembers: 8,
+        newMembers: newMembers,
         bookRequests: requestsData.count
       });
     } catch (error) {
@@ -57,9 +66,11 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       setStats({
         totalBooks: 0,
         availableBooks: 0,
-        activeMembers: 3,
-        overdueBooks: 23,
-        newMembers: 8
+        activeMembers: 0,
+        overdueBooks: 0,
+        totalFines: 0,
+        newMembers: 0,
+        bookRequests: 0
       });
     }
   };
