@@ -1073,7 +1073,7 @@ def get_user_reservations(user_id):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT br.id, br.status, br.rejection_reason, b.title, b.author
+        SELECT br.id, br.status, br.rejection_reason, b.title, b.author, b.id, br.requested_at, br.approved_at
         FROM book_reservations br
         JOIN books b ON br.book_id = b.id
         WHERE br.user_id = ?
@@ -1088,7 +1088,10 @@ def get_user_reservations(user_id):
             'status': res[1],
             'rejection_reason': res[2],
             'book_title': res[3],
-            'book_author': res[4]
+            'book_author': res[4],
+            'book_id': res[5],
+            'requested_at': res[6],
+            'approved_at': res[7]
         })
     
     conn.close()
