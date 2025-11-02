@@ -192,15 +192,24 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       // Real new book notifications should come from backend when admin adds a book
 
       // Merge notifications intelligently to prevent duplicates and glitching
-      // Combine backend persisted notifications with newly generated notifications
-      // DO NOT include current Redux notifications to prevent infinite accumulation
+      // Strategy: Backend notifications are source of truth, but include Redux notifications
+      // that start with "db-" prefix (those came from backend) or recent ones (< 60 seconds old)
       
       // Create a Map to deduplicate by unique key (type + book/reservation info)
       const notificationMap = new Map<string, Notification>();
       
-      // Only merge backend notifications and newly generated notifications
-      // This prevents the infinite loop where we keep adding to existing notifications
-      [...backendNotifications, ...notificationList].forEach(notif => {
+      // Get Redis notifications that should be preserved:
+      // 1. Those from backend (id starts with "db-")
+      // 2. Recent notifications (less than 60 seconds old) - might not be in backend yet
+      const now = Date.now();
+      const recentReduxNotifications = notifications.filter(n => {
+        const notifTime = new Date(n.timestamp).getTime();
+        const ageInSeconds = (now - notifTime) / 1000;
+        return !n.id.startsWith('db-') && ageInSeconds < 60;
+      });
+      
+      // Merge: backend + recent redux + newly generated
+      [...backendNotifications, ...recentReduxNotifications, ...notificationList].forEach(notif => {
         // Create a unique key based on notification type and relevant data
         let uniqueKey = notif.id;
         
@@ -242,6 +251,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       
       if (hasChanged) {
         console.log(`Notifications changed: ${notifications.length} -> ${deduplicatedNotifications.length}`);
+        console.log(`Backend: ${backendNotifications.length}, Generated: ${notificationList.length}, Recent Redux: ${recentReduxNotifications.length}`);
+        console.log('Notification types:', deduplicatedNotifications.map(n => `${n.type}: ${n.title}`));
         setNotifications(deduplicatedNotifications);
       } else {
         console.log('Notifications unchanged, skipping update');

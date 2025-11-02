@@ -66,17 +66,29 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       const fines = await apiClient.getMyFines(user.id);
       const myBooks = await apiClient.getMyBooks(user.id);
       
+      // Get backend notifications to check against as well
+      const { notificationApi } = await import('../services/api');
+      const backendNotifications = await notificationApi.getUserNotifications(user.id);
+      
       // Check for approved reservations
       reservations.forEach((reservation) => {
         if (reservation.status === 'approved') {
-          // Check if we already have a notification for this approved reservation in Redux store
-          const existingNotif = reduxNotifications.find(n => 
+          // Check if we already have a notification for this approved reservation
+          // Check both Redux store AND backend database
+          const existingInRedux = reduxNotifications.find(n => 
             n.type === 'reservation_approved' && 
             (n.data?.reservationId === reservation.id || 
              n.message.includes(reservation.book_title))
           );
           
-          if (!existingNotif) {
+          const existingInBackend = backendNotifications.find((n: any) => 
+            n.type === 'reservation_approved' && 
+            (n.message.includes(reservation.book_title) ||
+             (n.data && JSON.parse(n.data)?.reservationId === reservation.id))
+          );
+          
+          if (!existingInRedux && !existingInBackend) {
+            console.log(`Creating approved notification for: ${reservation.book_title}`);
             showNotification(
               'Reservation Approved!',
               `Your reservation for "${reservation.book_title}" has been approved! You can now pick it up.`,
@@ -89,6 +101,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
                 timestamp: reservation.approved_at || new Date().toISOString()
               }
             );
+          } else {
+            console.log(`Notification already exists for: ${reservation.book_title}`);
           }
         }
       });
