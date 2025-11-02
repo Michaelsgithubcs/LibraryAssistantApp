@@ -45,19 +45,14 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     return () => clearInterval(interval);
   }, []);
 
-  // Mark all as read when screen is focused
+  // Mark notifications as read when user views them (not automatically on screen focus)
+  // This allows the red dot to show for new notifications
+  // Users can manually mark all as read using pull-to-refresh
   useFocusEffect(
     React.useCallback(() => {
-      if (notifications.some(n => !n.read)) {
-        // Use the Redux action directly to mark all as read in one operation
-        dispatch(markAllAsRead());
-        
-        // This will ensure the badge is also reset
-        const NotificationService = require('../services/NotificationService').default;
-        NotificationService.resetBadgeCount();
-        
-        console.log("Marked all notifications as read using Redux action");
-      }
+      // Removed automatic mark-all-as-read on screen focus
+      // Let users see unread notifications with red dots
+      console.log("NotificationsScreen focused - NOT auto-marking as read");
     }, [notifications, dispatch])
   );
 
@@ -214,7 +209,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         let uniqueKey = notif.id;
         
         // For reservation notifications, use reservationId or bookTitle to prevent duplicates
-        if (notif.type === 'reservation' || notif.type === 'reservation_approved') {
+        if (notif.type === 'reservation' || notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
           const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
           const reservationId = notif.data?.reservationId || '';
           uniqueKey = `${notif.type}-${reservationId || bookTitle}`;
@@ -230,10 +225,28 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           uniqueKey = `${notif.type}-${fineId}`;
         }
         
-        // Keep the most recent notification for each unique key
+        // Keep notification with preference: backend > generated > recent redux
+        // For same key, prefer the one with OLDER timestamp (original creation time)
         const existing = notificationMap.get(uniqueKey);
-        if (!existing || new Date(notif.timestamp) > new Date(existing.timestamp)) {
+        if (!existing) {
           notificationMap.set(uniqueKey, notif);
+        } else {
+          // Prefer backend notifications (id starts with "db-")
+          const isNewFromBackend = notif.id.startsWith('db-');
+          const isExistingFromBackend = existing.id.startsWith('db-');
+          
+          if (isNewFromBackend && !isExistingFromBackend) {
+            // Backend always wins over non-backend
+            notificationMap.set(uniqueKey, notif);
+          } else if (!isNewFromBackend && isExistingFromBackend) {
+            // Keep existing backend notification
+            // Do nothing
+          } else {
+            // Both from same source, keep older timestamp (original)
+            if (new Date(notif.timestamp) < new Date(existing.timestamp)) {
+              notificationMap.set(uniqueKey, notif);
+            }
+          }
         }
       });
       
@@ -291,6 +304,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     switch (type) {
       case 'reservation':
       case 'reservation_approved':
+      case 'reservation_rejected':
         return <ReservationIcon width={24} height={24} />;
       case 'fine':
         return <FineIcon width={24} height={24} />;
@@ -311,6 +325,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     switch (type) {
       case 'reservation': return colors.primary;
       case 'reservation_approved': return colors.success;
+      case 'reservation_rejected': return colors.danger;
       case 'fine': return colors.primary;
       case 'overdue': return colors.danger;
       case 'due_soon': return colors.warning;
@@ -324,6 +339,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     switch (type) {
       case 'reservation': return 'View Status';
       case 'reservation_approved': return 'View Books';
+      case 'reservation_rejected': return 'View Details';
       case 'fine': return 'Pay Fine';
       case 'overdue': return 'View Books';
       case 'due_soon': return 'View Books';
@@ -339,6 +355,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     switch (notification.type) {
       case 'reservation':
       case 'reservation_approved':
+      case 'reservation_rejected':
       case 'overdue':
       case 'due_soon':
         navigation.navigate('BorrowedBooks');
@@ -359,6 +376,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
 
   // Sort notifications based on sort order
   const sortedNotifications = React.useMemo(() => {
+    console.log(`Sorting ${notifications.length} notifications by ${sortOrder}`);
+    
     const sorted = [...notifications].sort((a, b) => {
       const dateA = new Date(a.timestamp).getTime();
       const dateB = new Date(b.timestamp).getTime();
@@ -370,7 +389,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       }
     });
     
-    console.log(`Sorting notifications: ${sortOrder}, count: ${sorted.length}`);
+    // Debug log top 3 after sorting
+    sorted.slice(0, 3).forEach((n, i) => {
+      const date = new Date(n.timestamp);
+      console.log(`  ${i + 1}. ${n.title} (${n.type}) - ${date.toLocaleString()}`);
+    });
+    
     return sorted;
   }, [notifications, sortOrder]);
 
