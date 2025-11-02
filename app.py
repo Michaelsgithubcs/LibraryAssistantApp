@@ -1680,5 +1680,30 @@ def ai_book_assistant_v2():
             'type': type(e).__name__
         }), 500
 
+@app.route('/api/admin/cleanup-old-notifications', methods=['POST'])
+def cleanup_old_notifications():
+    """Delete approved/rejected notifications older than 12 hours to fix UTC duplicates"""
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cutoff_time = datetime.now() - timedelta(hours=12)
+    cutoff_timestamp = cutoff_time.isoformat()
+    
+    cursor.execute('''
+        DELETE FROM notifications 
+        WHERE (type = 'reservation_approved' OR type = 'reservation_rejected')
+        AND created_at < ?
+    ''', (cutoff_timestamp,))
+    
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'deleted_count': deleted_count,
+        'cutoff_time': cutoff_timestamp
+    })
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
