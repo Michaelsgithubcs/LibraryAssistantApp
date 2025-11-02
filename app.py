@@ -1189,12 +1189,14 @@ def approve_reservation(request_id):
         # Update available copies
         cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
         
-        # Update reservation status
+        # Update reservation status with local timestamp
+        from datetime import datetime
+        local_timestamp = datetime.now().isoformat()
         cursor.execute('''
             UPDATE book_reservations 
-            SET status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = ?, viewed = 0
+            SET status = 'approved', approved_at = ?, approved_by = ?, viewed = 0
             WHERE id = ?
-        ''', (admin_id, request_id))
+        ''', (local_timestamp, admin_id, request_id))
         
         conn.commit()
         return jsonify({'message': 'Reservation approved and book issued'})
@@ -1213,7 +1215,9 @@ def reject_reservation(request_id):
     cursor = conn.cursor()
     
     try:
-        cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = CURRENT_TIMESTAMP, viewed = 0 WHERE id = ?', (reason, request_id))
+        from datetime import datetime
+        local_timestamp = datetime.now().isoformat()
+        cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = ?, viewed = 0 WHERE id = ?', (reason, local_timestamp, request_id))
         conn.commit()
         return jsonify({'message': 'Reservation rejected'})
     except Exception as e:
