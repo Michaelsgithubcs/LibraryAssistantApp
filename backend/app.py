@@ -1249,6 +1249,84 @@ def cancel_reservation(reservation_id):
         conn.close()
         return jsonify({'error': str(e)}), 500
 
+# ============ NOTIFICATIONS API ============
+@app.route('/api/users/<int:user_id>/notifications', methods=['GET'])
+def get_user_notifications(user_id):
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT id, type, title, message, data, is_read, created_at
+            FROM notifications
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        ''', (user_id,))
+        
+        notifications = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(notifications)
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/users/<int:user_id>/notifications', methods=['POST'])
+def create_notification(user_id):
+    data = request.json
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, title, message, data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            data.get('type'),
+            data.get('title'),
+            data.get('message'),
+            data.get('data', ''),
+            data.get('timestamp', datetime.now().isoformat())
+        ))
+        
+        notification_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return jsonify({'id': notification_id, 'message': 'Notification created successfully'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+def mark_notification_read(notification_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE notifications SET is_read = 1 WHERE id = ?', (notification_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Notification marked as read'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/users/<int:user_id>/notifications/mark-all-read', methods=['PUT'])
+def mark_all_notifications_read(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ?', (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'All notifications marked as read'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/books/<int:book_id>/mark-read', methods=['POST'])
 def mark_book_as_read(book_id):
     data = request.json

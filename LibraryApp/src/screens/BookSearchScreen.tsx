@@ -58,7 +58,7 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
       showNotification(
         'Reservation Confirmed',
         `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title }
+        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
       
       fetchBooks();
@@ -74,7 +74,7 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
       showNotification(
         'Reservation Confirmed',
         `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title }
+        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
     }
   };

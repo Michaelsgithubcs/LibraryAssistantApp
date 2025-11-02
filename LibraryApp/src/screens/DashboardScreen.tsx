@@ -436,7 +436,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       showNotification(
         'Reservation Confirmed',
         `"${bookTitle}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle }
+        { type: 'reservation', bookId, bookTitle, userId: user.id }
       );
       
       console.log(`Book ${bookId} - ${bookTitle} reserved successfully - notification added`);

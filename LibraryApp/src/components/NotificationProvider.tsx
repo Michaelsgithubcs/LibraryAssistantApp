@@ -46,10 +46,10 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
   }, []);
 
   // Show a notification
-  const showNotification = useCallback((title: string, message: string, data?: any) => {
+  const showNotification = useCallback(async (title: string, message: string, data?: any) => {
     const notification = {
       id: Date.now().toString(),
-      type: data?.type || 'info',
+      type: data?.type || 'reservation',
       title,
       message,
       timestamp: new Date().toISOString(),
@@ -58,6 +58,24 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
     
     // Add to Redux store
     dispatch(addNotification(notification));
+    
+    // Save to backend database for persistence
+    try {
+      const { notificationApi } = await import('../services/api');
+      const userData = data?.userId || data?.user_id;
+      if (userData) {
+        await notificationApi.createNotification(userData, {
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          data: JSON.stringify(notification.data || {}),
+          timestamp: notification.timestamp,
+        });
+        console.log('Notification saved to backend database');
+      }
+    } catch (error) {
+      console.error('Failed to save notification to backend:', error);
+    }
     
     // Show system notification
     NotificationService.showLocalNotification({

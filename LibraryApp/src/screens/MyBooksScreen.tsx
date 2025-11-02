@@ -111,7 +111,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
       showNotification(
         'Reservation Confirmed',
         `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title }
+        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
       
       await fetchData();
@@ -126,7 +126,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
       showNotification(
         'Reservation Confirmed',
         `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title }
+        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
       
       await fetchData();

@@ -370,3 +370,44 @@ export async function askBookAssistant(book: AiBookContext, question: string): P
     throw e;
   }
 }
+
+// ============ NOTIFICATION API METHODS ============
+export const notificationApi = {
+  async getUserNotifications(userId: number) {
+    const response = await fetch(`${API_BASE}/users/${userId}/notifications`);
+    if (!response.ok) throw new Error('Failed to fetch notifications');
+    return response.json();
+  },
+
+  async createNotification(userId: number, notification: {
+    type: string;
+    title: string;
+    message: string;
+    data?: string;
+    timestamp?: string;
+  }) {
+    const response = await fetch(`${API_BASE}/users/${userId}/notifications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notification),
+    });
+    if (!response.ok) throw new Error('Failed to create notification');
+    return response.json();
+  },
+
+  async markNotificationRead(notificationId: number) {
+    const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+      method: 'PUT',
+    });
+    if (!response.ok) throw new Error('Failed to mark notification as read');
+    return response.json();
+  },
+
+  async markAllNotificationsRead(userId: number) {
+    const response = await fetch(`${API_BASE}/users/${userId}/notifications/mark-all-read`, {
+      method: 'PUT',
+    });
+    if (!response.ok) throw new Error('Failed to mark all notifications as read');
+    return response.json();
+  },
+};

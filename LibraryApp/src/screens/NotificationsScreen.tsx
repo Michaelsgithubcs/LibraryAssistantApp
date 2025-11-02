@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../components/NotificationProvider';
 import { Notification } from '../store/slices/notificationSlice';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, StatusBar, TouchableOpacity } from 'react-native';
 import ReservationIcon from '../../assets/icons/notifications icons/reservation-notification.svg';
 import DueDateIcon from '../../assets/icons/notifications icons/duedate-notification.svg';
 import OverdueIcon from '../../assets/icons/notifications icons/overdue-notification.svg';
@@ -29,6 +29,7 @@ interface NotificationsScreenProps {
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, navigation }) => {
   const { notifications, markAsRead, setNotifications } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest'); // Default to newest first
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -77,6 +78,22 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     try {
       console.log('Fetching notifications data...');
       
+      // First, load persisted notifications from backend database
+      const { notificationApi } = await import('../services/api');
+      const persistedNotifications = await notificationApi.getUserNotifications(user.id);
+      console.log(`Loaded ${persistedNotifications.length} persisted notifications from database`);
+      
+      // Convert backend notifications to app format
+      const backendNotifications: Notification[] = persistedNotifications.map((n: any) => ({
+        id: `db-${n.id}`,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        timestamp: n.created_at,
+        read: n.is_read === 1,
+        data: n.data ? JSON.parse(n.data) : {}
+      }));
+      
       const [reservations, myBooks, fines, books] = await Promise.all([
         apiClient.getReservationStatus(user.id),
         apiClient.getMyBooks(user.id),
@@ -84,36 +101,13 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         apiClient.getBooks()
       ]);
 
-      const notificationList: Notification[] = [];
+      const notificationList: Notification[] = [...backendNotifications];
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Reservation notifications
-      reservations.forEach((reservation, index) => {
-        if (reservation.status === 'approved') {
-          const notification = {
-            id: `reservation-${reservation.id}`,
-            type: 'reservation',
-            title: 'Reservation Approved!',
-            message: `Your reservation for "${reservation.book_title}" has been approved and the book has been issued to you!`,
-            timestamp: new Date().toISOString(),
-            read: false,
-            data: reservation
-          };
-          notificationList.push(notification);
-        } else if (reservation.status === 'rejected') {
-          const notification = {
-            id: `reservation-${reservation.id}`,
-            type: 'reservation',
-            title: 'Reservation Rejected',
-            message: `Your reservation for "${reservation.book_title}" was rejected. ${reservation.rejection_reason || ''}`,
-            timestamp: new Date().toISOString(),
-            read: false,
-            data: reservation
-          };
-          notificationList.push(notification);
-        }
-      });
+      // Reservation notifications - ONLY from Redux store (added when user makes reservation)
+      // Don't generate fake backend notifications for approved/rejected reservations
+      // Those should be handled by push notifications or backend webhooks
 
       // Due date and overdue notifications
       myBooks.forEach((book) => {
@@ -129,7 +123,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               type: 'due_soon',
               title: 'Book Due in 2 Days',
               message: `"${book.title}" is due in 2 days (${new Date(book.due_date).toLocaleDateString()}). Please return it on time to avoid fines.`,
-              timestamp: new Date().toISOString(),
+              timestamp: book.issue_date || new Date().toISOString(),
               read: false,
               data: book
             };
@@ -140,7 +134,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               type: 'due_soon',
               title: 'Book Due Tomorrow',
               message: `"${book.title}" is due tomorrow (${new Date(book.due_date).toLocaleDateString()}). Please return it to avoid fines.`,
-              timestamp: new Date().toISOString(),
+              timestamp: book.issue_date || new Date().toISOString(),
               read: false,
               data: book
             };
@@ -153,7 +147,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               type: 'overdue',
               title: 'Book Overdue!',
               message: `"${book.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue. Fine: R${fineAmount.toFixed(2)}. Please return immediately.`,
-              timestamp: new Date().toISOString(),
+              timestamp: book.due_date || new Date().toISOString(),
               read: false,
               data: { ...book, daysOverdue, fineAmount }
             };
@@ -180,34 +174,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         }
       });
       
-      // Book returned notifications
-      myBooks.forEach((book) => {
-        if (book.status === 'returned') {
-          notificationList.push({
-            id: `returned-${book.id}`,
-            type: 'returned',
-            title: 'Book Returned',
-            message: `"${book.title}" has been successfully returned. Thank you for reading!`,
-            timestamp: book.due_date || new Date().toISOString(),
-            read: false,
-            data: book
-          });
-        }
-      });
+      // Book returned notifications - DON'T show these
+      // Returned books are history, not active notifications
       
-      // New book notifications (latest 2 books as "new")
-      const newBooks = books.slice(0, 2);
-      newBooks.forEach((book) => {
-        notificationList.push({
-          id: `new-book-${book.id}`,
-          type: 'new_book',
-          title: 'New Book Added',
-          message: `"${book.title}" by ${book.author} has been added to the library. Reserve it now!`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          data: book
-        });
-      });
+      // New book notifications - REMOVED
+      // These were fake notifications showing random books
+      // Real new book notifications should come from backend when admin adds a book
 
       // DON'T overwrite existing notifications - instead merge them
       // Keep existing Redux store notifications and add new backend ones
@@ -217,8 +189,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       
       const allNotifications = [...notifications, ...newNotifications];
       
-      // Sort by timestamp (newest first)
-      allNotifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // Don't sort here - let the sortedNotifications computed value handle it
+      // This preserves the user's sort preference
       
       setNotifications(allNotifications);
     } catch (error) {
@@ -317,13 +289,50 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     }
   };
 
+  // Sort notifications based on sort order
+  const sortedNotifications = React.useMemo(() => {
+    const sorted = [...notifications].sort((a, b) => {
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+      
+      if (sortOrder === 'newest') {
+        return dateB - dateA; // Newest first (descending)
+      } else {
+        return dateA - dateB; // Oldest first (ascending)
+      }
+    });
+    
+    console.log(`Sorting notifications: ${sortOrder}, count: ${sorted.length}`);
+    return sorted;
+  }, [notifications, sortOrder]);
+
+  const toggleSortOrder = () => {
+    setSortOrder(prevOrder => {
+      const newOrder = prevOrder === 'newest' ? 'oldest' : 'newest';
+      console.log(`Sort order changed to: ${newOrder}`);
+      return newOrder;
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
       
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        <Text style={styles.headerSubtitle}>{notifications.length} notifications</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <Text style={styles.headerSubtitle}>{notifications.length} notifications</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={toggleSortOrder}
+          >
+            <Text style={styles.sortButtonText}>
+              {sortOrder === 'newest' ? '↓ Newest' : '↑ Oldest'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       
       <ScrollView 
@@ -331,8 +340,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {notifications.length > 0 ? (
-          notifications.map((notification) => (
+        {sortedNotifications.length > 0 ? (
+          sortedNotifications.map((notification) => (
             <ModernCard 
               key={notification.id} 
               variant="elevated" 
@@ -404,6 +413,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -415,6 +430,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text.inverse,
     opacity: 0.8,
+  },
+  
+  sortButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  
+  sortButtonText: {
+    color: colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
   },
   
   content: {
