@@ -223,6 +223,10 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
           const reservationId = notif.data?.reservationId || '';
           uniqueKey = `${notif.type}-${reservationId || bookTitle}`;
+          
+          if (notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
+            console.log(`Processing ${notif.type}: uniqueKey=${uniqueKey}, reservationId=${reservationId}, timestamp=${notif.created_at}`);
+          }
         }
         // For due/overdue notifications, use book ID
         else if (notif.type === 'due_soon' || notif.type === 'overdue') {
@@ -235,8 +239,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           uniqueKey = `${notif.type}-${fineId}`;
         }
         
-        // Keep notification with preference: backend > generated > recent redux
-        // For same key, prefer the one with OLDER timestamp (original creation time)
+        // Keep notification with preference based on type
         const existing = notificationMap.get(uniqueKey);
         if (!existing) {
           notificationMap.set(uniqueKey, notif);
@@ -252,9 +255,27 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
             // Keep existing backend notification
             // Do nothing
           } else {
-            // Both from same source, keep older timestamp (original)
-            if (new Date(notif.timestamp) < new Date(existing.timestamp)) {
-              notificationMap.set(uniqueKey, notif);
+            // Both from same source - decide based on notification type
+            const newTime = new Date(notif.timestamp).getTime();
+            const existingTime = new Date(existing.timestamp).getTime();
+            
+            if (notif.type === 'reservation') {
+              // For "Reservation Sent", keep the NEWEST (latest reservation)
+              if (newTime > existingTime) {
+                console.log(`Replacing ${notif.type} with newer: ${new Date(newTime).toLocaleString()} vs ${new Date(existingTime).toLocaleString()}`);
+                notificationMap.set(uniqueKey, notif);
+              }
+            } else if (notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
+              // For approved/rejected, keep the NEWEST (most recent status update)
+              if (newTime > existingTime) {
+                console.log(`Replacing ${notif.type} with newer: ${new Date(newTime).toLocaleString()} vs ${new Date(existingTime).toLocaleString()}`);
+                notificationMap.set(uniqueKey, notif);
+              }
+            } else {
+              // For other types (due dates, fines), keep OLDEST (original event)
+              if (newTime < existingTime) {
+                notificationMap.set(uniqueKey, notif);
+              }
             }
           }
         }
