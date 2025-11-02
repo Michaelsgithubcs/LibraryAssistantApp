@@ -1236,15 +1236,33 @@ def cancel_reservation(reservation_id):
     cursor = conn.cursor()
     
     try:
-        cursor.execute('DELETE FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        # Get user_id before deleting the reservation
+        cursor.execute('SELECT user_id FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        result = cursor.fetchone()
         
-        if cursor.rowcount == 0:
+        if not result:
             conn.close()
             return jsonify({'error': 'Reservation not found or cannot be cancelled'}), 404
         
+        user_id = result[0]
+        
+        # Delete the reservation
+        cursor.execute('DELETE FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        
+        # Delete related notification(s) - notifications with "reservation" type for this user
+        # We need to search in the data field for the bookId or just delete by type and message pattern
+        cursor.execute('''
+            DELETE FROM notifications 
+            WHERE user_id = ? 
+            AND type = 'reservation' 
+            AND message LIKE '%successfully reserved%'
+        ''', (user_id,))
+        
+        print(f'Deleted {cursor.rowcount} reservation notification(s) for user {user_id}')
+        
         conn.commit()
         conn.close()
-        return jsonify({'message': 'Reservation cancelled successfully'})
+        return jsonify({'message': 'Reservation and related notifications cancelled successfully'})
     except Exception as e:
         conn.close()
         return jsonify({'error': str(e)}), 500
