@@ -73,7 +73,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             showNotification(
               'Reservation Approved!',
               `Your reservation for "${reservation.book_title}" has been approved! You can now pick it up.`,
-              { type: 'reservation_approved', bookId: reservation.book_id, bookTitle: reservation.book_title, userId: user.id, reservationId: reservation.id }
+              { 
+                type: 'reservation_approved', 
+                bookId: reservation.book_id, 
+                bookTitle: reservation.book_title, 
+                userId: user.id, 
+                reservationId: reservation.id,
+                timestamp: reservation.approved_at || new Date().toISOString()
+              }
             );
           }
         }

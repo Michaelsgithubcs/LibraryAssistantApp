@@ -52,7 +52,7 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
       type: data?.type || 'reservation',
       title,
       message,
-      timestamp: new Date().toISOString(),
+      timestamp: data?.timestamp || new Date().toISOString(),
       data
     };
     

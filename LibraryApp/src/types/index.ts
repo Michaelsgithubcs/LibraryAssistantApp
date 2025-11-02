@@ -67,4 +67,6 @@ export interface ReservationStatus {
   rejection_reason?: string;
   book_title: string;
   book_author: string;
+  requested_at?: string;
+  approved_at?: string;
 }

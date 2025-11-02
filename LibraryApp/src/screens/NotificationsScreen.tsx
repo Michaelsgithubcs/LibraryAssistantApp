@@ -118,23 +118,31 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
           if (diffDays === 2) {
+            // Calculate when this notification should have been sent (2 days before due date)
+            const notificationDate = new Date(book.due_date);
+            notificationDate.setDate(notificationDate.getDate() - 2);
+            
             const notification = {
               id: `due-soon-2-${book.id}`,
               type: 'due_soon',
               title: 'Book Due in 2 Days',
               message: `"${book.title}" is due in 2 days (${new Date(book.due_date).toLocaleDateString()}). Please return it on time to avoid fines.`,
-              timestamp: book.issue_date || new Date().toISOString(),
+              timestamp: notificationDate.toISOString(),
               read: false,
               data: book
             };
             notificationList.push(notification);
           } else if (diffDays === 1) {
+            // Calculate when this notification should have been sent (1 day before due date)
+            const notificationDate = new Date(book.due_date);
+            notificationDate.setDate(notificationDate.getDate() - 1);
+            
             const notification = {
               id: `due-soon-1-${book.id}`,
               type: 'due_soon',
               title: 'Book Due Tomorrow',
               message: `"${book.title}" is due tomorrow (${new Date(book.due_date).toLocaleDateString()}). Please return it to avoid fines.`,
-              timestamp: book.issue_date || new Date().toISOString(),
+              timestamp: notificationDate.toISOString(),
               read: false,
               data: book
             };
@@ -142,6 +150,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           } else if (diffDays < 0) {
             const daysOverdue = Math.abs(diffDays);
             const fineAmount = daysOverdue * 5.00;
+            
             const notification = {
               id: `overdue-${book.id}`,
               type: 'overdue',
