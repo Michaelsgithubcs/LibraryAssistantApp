@@ -1076,7 +1076,7 @@ def get_user_reservations(user_id):
         SELECT br.id, br.status, br.rejection_reason, b.title, b.author, b.id, br.requested_at, br.approved_at
         FROM book_reservations br
         JOIN books b ON br.book_id = b.id
-        WHERE br.user_id = ?
+        WHERE br.user_id = ? AND br.status = 'pending'
         ORDER BY br.requested_at DESC
     ''', (user_id,))
     reservations = cursor.fetchall()
