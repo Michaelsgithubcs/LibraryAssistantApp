@@ -9,6 +9,8 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook, Fine, Book, ReservationStatus } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 // Using the updated Book interface from types
 
@@ -19,6 +21,7 @@ interface DashboardScreenProps {
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigation }) => {
   const { showNotification } = useNotifications();
+  const reduxNotifications = useSelector((state: RootState) => state.notifications.notifications);
   const [stats, setStats] = useState({
     booksIssued: 0,
     overdueBooks: 0,
@@ -66,9 +69,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Check for approved reservations
       reservations.forEach((reservation) => {
         if (reservation.status === 'approved') {
-          const existingNotif = userReservations.find(r => 
-            r.id === reservation.id && r.status === 'approved'
+          // Check if we already have a notification for this approved reservation in Redux store
+          const existingNotif = reduxNotifications.find(n => 
+            n.type === 'reservation_approved' && 
+            (n.data?.reservationId === reservation.id || 
+             n.message.includes(reservation.book_title))
           );
+          
           if (!existingNotif) {
             showNotification(
               'Reservation Approved!',

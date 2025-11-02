@@ -35,11 +35,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   useEffect(() => {
     fetchNotifications();
     
-    // Poll for new notifications every 10 seconds
+    // Reduced polling to every 30 seconds to prevent conflicts with DashboardScreen (15s)
+    // This prevents the infinite glitch from fighting updates
     const interval = setInterval(() => {
       console.log('Auto-fetching notifications...');
       fetchNotifications();
-    }, 10000);
+    }, 30000);
     
     return () => clearInterval(interval);
   }, []);
@@ -191,13 +192,15 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       // Real new book notifications should come from backend when admin adds a book
 
       // Merge notifications intelligently to prevent duplicates and glitching
-      // Priority: Backend persisted notifications > Redux store notifications > Generated notifications
+      // Combine backend persisted notifications with newly generated notifications
+      // DO NOT include current Redux notifications to prevent infinite accumulation
       
       // Create a Map to deduplicate by unique key (type + book/reservation info)
       const notificationMap = new Map<string, Notification>();
       
-      // First add all notifications to the map
-      [...backendNotifications, ...notifications, ...notificationList].forEach(notif => {
+      // Only merge backend notifications and newly generated notifications
+      // This prevents the infinite loop where we keep adding to existing notifications
+      [...backendNotifications, ...notificationList].forEach(notif => {
         // Create a unique key based on notification type and relevant data
         let uniqueKey = notif.id;
         
@@ -228,10 +231,21 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       // Convert back to array
       const deduplicatedNotifications = Array.from(notificationMap.values());
       
-      // Don't sort here - let the sortedNotifications computed value handle it
-      // This preserves the user's sort preference
+      // Only update if notifications have actually changed
+      // Compare by count and IDs to prevent unnecessary updates that cause glitching
+      const currentIds = new Set(notifications.map(n => n.id).sort());
+      const newIds = new Set(deduplicatedNotifications.map(n => n.id).sort());
       
-      setNotifications(deduplicatedNotifications);
+      const hasChanged = 
+        notifications.length !== deduplicatedNotifications.length ||
+        ![...currentIds].every(id => newIds.has(id));
+      
+      if (hasChanged) {
+        console.log(`Notifications changed: ${notifications.length} -> ${deduplicatedNotifications.length}`);
+        setNotifications(deduplicatedNotifications);
+      } else {
+        console.log('Notifications unchanged, skipping update');
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
