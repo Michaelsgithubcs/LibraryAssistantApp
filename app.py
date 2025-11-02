@@ -1705,5 +1705,45 @@ def cleanup_old_notifications():
         'cutoff_time': cutoff_timestamp
     })
 
+@app.route('/api/admin/init-notifications-table', methods=['POST'])
+def init_notifications_table():
+    """Create notifications table if it doesn't exist"""
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Create notifications table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                data TEXT,
+                is_read BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        
+        # Create indexes
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at)')
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Notifications table created/verified successfully'
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
