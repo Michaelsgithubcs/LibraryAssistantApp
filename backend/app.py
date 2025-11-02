@@ -1198,6 +1198,30 @@ def approve_reservation(request_id):
             WHERE id = ?
         ''', (local_timestamp, admin_id, request_id))
         
+        # Get reservation details for notification
+        cursor.execute('''
+            SELECT br.user_id, b.title, b.id
+            FROM book_reservations br
+            JOIN books b ON br.book_id = b.id
+            WHERE br.id = ?
+        ''', (request_id,))
+        reservation_info = cursor.fetchone()
+        
+        if reservation_info:
+            user_id, book_title, book_id = reservation_info
+            # Create notification for user
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, title, message, data, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                'reservation_approved',
+                'Reservation Approved',
+                f'Your reservation for "{book_title}" has been approved. Please collect it within 3 days.',
+                f'{{"reservationId": {request_id}, "bookTitle": "{book_title}", "bookId": {book_id}, "timestamp": "{local_timestamp}"}}',
+                local_timestamp
+            ))
+        
         conn.commit()
         return jsonify({'message': 'Reservation approved and book issued'})
     except Exception as e:
@@ -1218,6 +1242,31 @@ def reject_reservation(request_id):
         from datetime import datetime
         local_timestamp = datetime.now().isoformat()
         cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = ?, viewed = 0 WHERE id = ?', (reason, local_timestamp, request_id))
+        
+        # Get reservation details for notification
+        cursor.execute('''
+            SELECT br.user_id, b.title, b.id
+            FROM book_reservations br
+            JOIN books b ON br.book_id = b.id
+            WHERE br.id = ?
+        ''', (request_id,))
+        reservation_info = cursor.fetchone()
+        
+        if reservation_info:
+            user_id, book_title, book_id = reservation_info
+            # Create notification for user
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, title, message, data, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                'reservation_rejected',
+                'Reservation Rejected',
+                f'Your reservation for "{book_title}" was rejected. Reason: {reason}',
+                f'{{"reservationId": {request_id}, "bookTitle": "{book_title}", "bookId": {book_id}, "timestamp": "{local_timestamp}"}}',
+                local_timestamp
+            ))
+        
         conn.commit()
         return jsonify({'message': 'Reservation rejected'})
     except Exception as e:
