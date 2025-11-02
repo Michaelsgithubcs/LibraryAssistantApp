@@ -84,6 +84,40 @@ const NotificationHeaderButton = ({ onPress }: { onPress: () => void }) => {
   );
 };
 
+// Notification Tab Icon Component that properly subscribes to Redux
+const NotificationTabIcon = ({ size, focused }: { size?: number; focused: boolean }) => {
+  // Connect directly to Redux store
+  const unreadCount = useSelector((state: any) => state.notifications.unreadCount);
+  
+  return (
+    <View style={{ alignItems: 'center', position: 'relative' }}>
+      {focused ? (
+        <BellIconFilled width={size ?? 24} height={size ?? 24} />
+      ) : (
+        <BellIcon width={size ?? 24} height={size ?? 24} />
+      )}
+      {unreadCount > 0 && (
+        <View style={{
+          position: 'absolute',
+          top: -2,
+          right: -4,
+          width: 12,
+          height: 12,
+          borderRadius: 6,
+          backgroundColor: 'red',
+          borderWidth: 1,
+          borderColor: colors.surface,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.2,
+          shadowRadius: 1,
+          elevation: 2,
+        }} />
+      )}
+    </View>
+  );
+};
+
 const TabNavigator = ({ user }: { user: any }) => {
   const DashboardComponent = React.useCallback((props: any) => <DashboardScreen {...props} user={user} />, [user]);
   const MyBooksComponent = React.useCallback((props: any) => <MyBooksScreen {...props} user={user} />, [user]);
@@ -185,37 +219,9 @@ const TabNavigator = ({ user }: { user: any }) => {
           tabBarLabel: () => (
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Notifications</Text>
           ),
-          tabBarIcon: ({ size, focused }) => {
-            const { unreadCount } = useNotifications();
-            return (
-              <View style={{ alignItems: 'center', position: 'relative' }}>
-                {focused ? (
-                  <BellIconFilled width={size ?? 24} height={size ?? 24} />
-                ) : (
-                  <BellIcon width={size ?? 24} height={size ?? 24} />
-                )}
-                {unreadCount > 0 && (
-                  <View style={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -4,
-                    width: 12,
-                    height: 12,
-                    borderRadius: 6,
-                    backgroundColor: 'red',
-                    borderWidth: 1,
-                    borderColor: colors.surface,
-                    // Add a small shadow for better visibility
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 1,
-                    elevation: 2,
-                  }} />
-                )}
-              </View>
-            );
-          },
+          tabBarIcon: ({ size, focused }) => (
+            <NotificationTabIcon size={size} focused={focused} />
+          ),
         }}
       />
       

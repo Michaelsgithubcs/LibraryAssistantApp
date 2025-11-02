@@ -8,6 +8,7 @@ import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook, Fine, Book, ReservationStatus } from '../types';
+import { useNotifications } from '../components/NotificationProvider';
 
 // Using the updated Book interface from types
 
@@ -17,6 +18,7 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigation }) => {
+  const { showNotification } = useNotifications();
   const [stats, setStats] = useState({
     booksIssued: 0,
     overdueBooks: 0,
@@ -46,7 +48,42 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     fetchDashboardData();
     loadMLRecommendations(); // Automatically fetch ML recommendations
     loadNewBooks(); // Load the newest books
+    
+    // Poll for notification updates every 15 seconds to check for approved reservations
+    const notificationInterval = setInterval(() => {
+      checkForNewNotifications();
+    }, 15000);
+    
+    return () => clearInterval(notificationInterval);
   }, []);
+  
+  const checkForNewNotifications = async () => {
+    try {
+      const reservations = await apiClient.getReservationStatus(user.id);
+      const fines = await apiClient.getMyFines(user.id);
+      const myBooks = await apiClient.getMyBooks(user.id);
+      
+      // Check for approved reservations
+      reservations.forEach((reservation) => {
+        if (reservation.status === 'approved') {
+          const existingNotif = userReservations.find(r => 
+            r.id === reservation.id && r.status === 'approved'
+          );
+          if (!existingNotif) {
+            showNotification(
+              'Reservation Approved!',
+              `Your reservation for "${reservation.book_title}" has been approved!`
+            );
+          }
+        }
+      });
+      
+      // Update local state
+      setUserReservations(reservations);
+    } catch (error) {
+      console.log('Error checking for new notifications:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -388,9 +425,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       const result = await apiClient.reserveBook(bookId, user.id);
       
       // Success feedback
-      Alert.alert('Success', result.message || 'Book reserved successfully!');
+      Alert.alert(
+        '✅ Reservation Successful', 
+        `"${bookTitle}" has been reserved! You will be notified when it's ready for pickup.`,
+        [{ text: 'OK' }]
+      );
       
-      console.log(`Book ${bookId} - ${bookTitle} reserved successfully`);
+      // Add notification
+      console.log('Adding reservation notification for:', bookTitle);
+      showNotification(
+        'Reservation Confirmed',
+        `"${bookTitle}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        { type: 'reservation', bookId, bookTitle }
+      );
+      
+      console.log(`Book ${bookId} - ${bookTitle} reserved successfully - notification added`);
       
       // Remove the reserved book from both recommended and new books lists immediately
       setRecommendedBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));

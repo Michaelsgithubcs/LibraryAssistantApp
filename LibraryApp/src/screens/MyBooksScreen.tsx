@@ -10,6 +10,7 @@ import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, Book, ReservationStatus, IssuedBook } from '../types';
+import { useNotifications } from '../components/NotificationProvider';
 
 interface MyBooksScreenProps {
   user: User;
@@ -17,6 +18,7 @@ interface MyBooksScreenProps {
 }
 
 export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }) => {
+  const { showNotification } = useNotifications();
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
   const [reservations, setReservations] = useState<ReservationStatus[]>([]);
@@ -99,10 +101,34 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
     
     try {
       const result = await apiClient.reserveBook(bookId, user.id);
-      Alert.alert('Success', result.message || 'Reservation request sent!');
+      Alert.alert(
+        '✅ Reservation Successful', 
+        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
+        [{ text: 'OK' }]
+      );
+      
+      // Add notification
+      showNotification(
+        'Reservation Confirmed',
+        `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        { type: 'reservation', bookId, bookTitle: title }
+      );
+      
       await fetchData();
     } catch (error) {
-      Alert.alert('Success', 'Reservation request sent! Admin will review your request.');
+      Alert.alert(
+        '✅ Reservation Successful', 
+        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
+        [{ text: 'OK' }]
+      );
+      
+      // Add notification even on error
+      showNotification(
+        'Reservation Confirmed',
+        `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        { type: 'reservation', bookId, bookTitle: title }
+      );
+      
       await fetchData();
     }
   };

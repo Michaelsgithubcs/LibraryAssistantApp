@@ -33,6 +33,14 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
 
   useEffect(() => {
     fetchNotifications();
+    
+    // Poll for new notifications every 10 seconds
+    const interval = setInterval(() => {
+      console.log('Auto-fetching notifications...');
+      fetchNotifications();
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Mark all as read when screen is focused
@@ -201,10 +209,18 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         });
       });
 
-      // Sort by timestamp (newest first)
-      notificationList.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // DON'T overwrite existing notifications - instead merge them
+      // Keep existing Redux store notifications and add new backend ones
+      // Filter out duplicates by ID
+      const existingIds = new Set(notifications.map(n => n.id));
+      const newNotifications = notificationList.filter(n => !existingIds.has(n.id));
       
-      setNotifications(notificationList);
+      const allNotifications = [...notifications, ...newNotifications];
+      
+      // Sort by timestamp (newest first)
+      allNotifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      setNotifications(allNotifications);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }

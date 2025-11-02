@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Image, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Image, FlatList, Linking } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -94,16 +94,38 @@ export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, naviga
     fetchEbooks();
   };
 
-  const handleDownload = (book: Ebook) => {
+  const handleDownload = async (book: Ebook) => {
+    // Try to open the book on Open Library or Internet Archive
+    const bookId = book.key.replace('/works/', '');
+    const openLibraryUrl = `https://openlibrary.org${book.key}`;
+    
+    // If the book has Internet Archive links, prefer those
+    let readUrl = openLibraryUrl;
+    if (book.ia && book.ia.length > 0) {
+      readUrl = `https://archive.org/details/${book.ia[0]}`;
+    }
+    
     Alert.alert(
-      'Download Book',
-      `"${book.title}" is available for free reading online.`,
+      'Read Ebook',
+      `"${book.title}" will open in your browser.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Read Online', 
-          onPress: () => {
-            Alert.alert('Success', 'Book is now available in your reading list!');
+          text: 'Open Book', 
+          onPress: async () => {
+            try {
+              // Direct open without checking - Android sometimes fails canOpenURL check
+              await Linking.openURL(readUrl);
+            } catch (error) {
+              Alert.alert(
+                'Error', 
+                `Failed to open the book. URL: ${readUrl}\n\nPlease copy and paste this URL in your browser.`,
+                [
+                  { text: 'OK' }
+                ]
+              );
+              console.error('Error opening book:', error);
+            }
           }
         }
       ]
