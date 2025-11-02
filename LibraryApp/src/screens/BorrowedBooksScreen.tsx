@@ -8,6 +8,9 @@ import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook, ReservationStatus, HistoryItem } from '../types';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../store';
+import { removeNotification } from '../store/slices/notificationSlice';
 
 interface BorrowedBooksScreenProps {
   user: User;
@@ -22,6 +25,8 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
   const [activeTab, setActiveTab] = useState<'borrowed' | 'returned' | 'read'>('borrowed');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const notifications = useSelector((state: RootState) => state.notifications.notifications);
 
   useEffect(() => {
     // Initial fetch
@@ -82,6 +87,19 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
   const handleCancelReservation = async (reservationId: number, bookTitle: string) => {
     try {
       await apiClient.cancelReservation(reservationId);
+      
+      // Remove notification from Redux store
+      // Find and remove the notification for this book
+      const notificationToRemove = notifications.find(n => 
+        n.type === 'reservation' && 
+        n.message.includes(bookTitle)
+      );
+      
+      if (notificationToRemove) {
+        dispatch(removeNotification(notificationToRemove.id));
+        console.log(`Removed notification for cancelled reservation: ${bookTitle}`);
+      }
+      
       Alert.alert('Success', `Reservation for "${bookTitle}" has been cancelled.`);
       fetchData(); // Refresh data
     } catch (error) {
