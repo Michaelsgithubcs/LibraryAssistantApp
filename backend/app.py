@@ -1213,7 +1213,7 @@ def reject_reservation(request_id):
     cursor = conn.cursor()
     
     try:
-        cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, viewed = 0 WHERE id = ?', (reason, request_id))
+        cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = CURRENT_TIMESTAMP, viewed = 0 WHERE id = ?', (reason, request_id))
         conn.commit()
         return jsonify({'message': 'Reservation rejected'})
     except Exception as e:

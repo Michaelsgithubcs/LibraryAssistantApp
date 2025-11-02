@@ -30,6 +30,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   const { notifications, markAsRead, setNotifications } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest'); // Default to newest first
+  const [isFetching, setIsFetching] = useState(false); // Prevent recursive fetches
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -71,6 +72,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   );
 
   const fetchNotifications = async () => {
+    if (isFetching) {
+      console.log('Already fetching, skipping...');
+      return;
+    }
+    
+    setIsFetching(true);
     try {
       console.log('Fetching notifications data...');
       
@@ -193,15 +200,18 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       // Create a Map to deduplicate by unique key (type + book/reservation info)
       const notificationMap = new Map<string, Notification>();
       
-      // Get Redis notifications that should be preserved:
-      // 1. Those from backend (id starts with "db-")
-      // 2. Recent notifications (less than 60 seconds old) - might not be in backend yet
+      // Get Redux notifications that should be preserved:
+      // Only include very recent ones (< 5 seconds) that might not be in backend yet
+      // This reduces the window for duplicates while still catching in-flight notifications
       const now = Date.now();
       const recentReduxNotifications = notifications.filter(n => {
         const notifTime = new Date(n.timestamp).getTime();
         const ageInSeconds = (now - notifTime) / 1000;
-        return !n.id.startsWith('db-') && ageInSeconds < 60;
+        // Only keep very recent non-backend notifications (reduced from 60s to 5s)
+        return !n.id.startsWith('db-') && ageInSeconds < 5;
       });
+      
+      console.log(`Merging: ${backendNotifications.length} backend, ${recentReduxNotifications.length} recent Redux, ${notificationList.length} generated`);
       
       // Merge: backend + recent redux + newly generated
       [...backendNotifications, ...recentReduxNotifications, ...notificationList].forEach(notif => {
@@ -272,6 +282,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
+    } finally {
+      setIsFetching(false);
     }
   };
 

@@ -71,7 +71,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       const backendNotifications = await notificationApi.getUserNotifications(user.id);
       
       // Check for approved and rejected reservations
+      // Only process recent reservations (within last 7 days) to avoid old timestamps
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
       reservations.forEach((reservation) => {
+        // Skip if no timestamp or too old
+        const resDate = reservation.approved_at ? new Date(reservation.approved_at) : 
+                       reservation.requested_at ? new Date(reservation.requested_at) : null;
+        if (!resDate || resDate < sevenDaysAgo) {
+          console.log(`Skipping old reservation: ${reservation.book_title} (${resDate})`);
+          return;
+        }
+        
         if (reservation.status === 'approved') {
           // Check if we already have a notification for this approved reservation
           // Check both Redux store AND backend database
