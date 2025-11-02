@@ -166,7 +166,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
             type: 'fine',
             title: 'Outstanding Fine',
             message: `You have an outstanding fine of R${totalFine.toFixed(2)} for "${fine.bookTitle}". ${reason}`,
-            timestamp: new Date().toISOString(),
+            timestamp: fine.dueDate || fine.issueDate || new Date().toISOString(),
             read: false,
             data: fine
           };
