@@ -72,7 +72,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
           if (!existingNotif) {
             showNotification(
               'Reservation Approved!',
-              `Your reservation for "${reservation.book_title}" has been approved!`
+              `Your reservation for "${reservation.book_title}" has been approved! You can now pick it up.`,
+              { type: 'reservation_approved', bookId: reservation.book_id, bookTitle: reservation.book_title, userId: user.id, reservationId: reservation.id }
             );
           }
         }
@@ -434,8 +435,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Add notification
       console.log('Adding reservation notification for:', bookTitle);
       showNotification(
-        'Reservation Confirmed',
-        `"${bookTitle}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        'Reservation Sent',
+        `Your reservation for "${bookTitle}" has been sent. You'll be notified when it's ready for pickup.`,
         { type: 'reservation', bookId, bookTitle, userId: user.id }
       );
       

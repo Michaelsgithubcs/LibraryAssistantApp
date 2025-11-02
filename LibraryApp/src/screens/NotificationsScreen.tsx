@@ -181,18 +181,48 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       // These were fake notifications showing random books
       // Real new book notifications should come from backend when admin adds a book
 
-      // DON'T overwrite existing notifications - instead merge them
-      // Keep existing Redux store notifications and add new backend ones
-      // Filter out duplicates by ID
-      const existingIds = new Set(notifications.map(n => n.id));
-      const newNotifications = notificationList.filter(n => !existingIds.has(n.id));
+      // Merge notifications intelligently to prevent duplicates and glitching
+      // Priority: Backend persisted notifications > Redux store notifications > Generated notifications
       
-      const allNotifications = [...notifications, ...newNotifications];
+      // Create a Map to deduplicate by unique key (type + book/reservation info)
+      const notificationMap = new Map<string, Notification>();
+      
+      // First add all notifications to the map
+      [...backendNotifications, ...notifications, ...notificationList].forEach(notif => {
+        // Create a unique key based on notification type and relevant data
+        let uniqueKey = notif.id;
+        
+        // For reservation notifications, use reservationId or bookTitle to prevent duplicates
+        if (notif.type === 'reservation' || notif.type === 'reservation_approved') {
+          const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
+          const reservationId = notif.data?.reservationId || '';
+          uniqueKey = `${notif.type}-${reservationId || bookTitle}`;
+        }
+        // For due/overdue notifications, use book ID
+        else if (notif.type === 'due_soon' || notif.type === 'overdue') {
+          const bookId = notif.data?.id || notif.data?.book_id || '';
+          uniqueKey = `${notif.type}-${bookId}`;
+        }
+        // For fine notifications, use fine ID
+        else if (notif.type === 'fine') {
+          const fineId = notif.data?.id || '';
+          uniqueKey = `${notif.type}-${fineId}`;
+        }
+        
+        // Keep the most recent notification for each unique key
+        const existing = notificationMap.get(uniqueKey);
+        if (!existing || new Date(notif.timestamp) > new Date(existing.timestamp)) {
+          notificationMap.set(uniqueKey, notif);
+        }
+      });
+      
+      // Convert back to array
+      const deduplicatedNotifications = Array.from(notificationMap.values());
       
       // Don't sort here - let the sortedNotifications computed value handle it
       // This preserves the user's sort preference
       
-      setNotifications(allNotifications);
+      setNotifications(deduplicatedNotifications);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
@@ -226,6 +256,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   const renderNotificationIcon = (type: string) => {
     switch (type) {
       case 'reservation':
+      case 'reservation_approved':
         return <ReservationIcon width={24} height={24} />;
       case 'fine':
         return <FineIcon width={24} height={24} />;
@@ -245,6 +276,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   const getNotificationColor = (type: string) => {
     switch (type) {
       case 'reservation': return colors.primary;
+      case 'reservation_approved': return colors.success;
       case 'fine': return colors.primary;
       case 'overdue': return colors.danger;
       case 'due_soon': return colors.warning;
@@ -256,7 +288,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   
   const getActionText = (type: string) => {
     switch (type) {
-      case 'reservation': return 'View Books';
+      case 'reservation': return 'View Status';
+      case 'reservation_approved': return 'View Books';
       case 'fine': return 'Pay Fine';
       case 'overdue': return 'View Books';
       case 'due_soon': return 'View Books';
@@ -271,6 +304,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     
     switch (notification.type) {
       case 'reservation':
+      case 'reservation_approved':
       case 'overdue':
       case 'due_soon':
         navigation.navigate('BorrowedBooks');

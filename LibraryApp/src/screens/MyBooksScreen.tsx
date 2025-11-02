@@ -109,8 +109,8 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
       
       // Add notification
       showNotification(
-        'Reservation Confirmed',
-        `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        'Reservation Sent',
+        `Your reservation for "${title}" has been sent. You'll be notified when it's ready for pickup.`,
         { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
       
@@ -124,8 +124,8 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
       
       // Add notification even on error
       showNotification(
-        'Reservation Confirmed',
-        `"${title}" has been successfully reserved. You'll be notified when it's ready for pickup.`,
+        'Reservation Sent',
+        `Your reservation for "${title}" has been sent. You'll be notified when it's ready for pickup.`,
         { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
       
