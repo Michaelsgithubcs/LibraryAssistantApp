@@ -26,6 +26,8 @@ db_dir = os.path.dirname(DATABASE)
 if db_dir:
     os.makedirs(db_dir, exist_ok=True)
 
+print(f"[Startup] Using database at: {os.path.abspath(DATABASE)}")
+
 # Configure Gemini API key from env if present
 GENAI_API_KEY = os.environ.get('GEMINI_API_KEY')
 if GENAI_API_KEY:
@@ -439,6 +441,33 @@ def get_overdue_count():
     
     conn.close()
     return jsonify({'count': count})
+
+# ============ ADMIN/DIAGNOSTICS (SAFE) ============
+@app.route('/api/admin/db-info', methods=['GET'])
+def db_info():
+    """Return database path and basic table counts to verify persistence after deploys."""
+    path = os.path.abspath(DATABASE)
+    exists = os.path.exists(DATABASE)
+    size = os.path.getsize(DATABASE) if exists else 0
+    info = {
+        'database_path': path,
+        'exists': exists,
+        'size_bytes': size,
+        'tables': {}
+    }
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        for name in ['books', 'book_reservations', 'notifications', 'users', 'issues']:
+            try:
+                cursor.execute(f'SELECT COUNT(1) FROM {name}')
+                info['tables'][name] = cursor.fetchone()[0]
+            except Exception:
+                info['tables'][name] = None
+        conn.close()
+    except Exception as e:
+        info['error'] = str(e)
+    return jsonify(info)
 
 # Admin routes
 @app.route('/api/admin/books', methods=['POST'])
@@ -1344,13 +1373,11 @@ def cancel_reservation(reservation_id):
         # Delete the reservation
         cursor.execute('DELETE FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
         
-        # Delete related notification(s) - notifications with "reservation" type for this user
-        # We need to search in the data field for the bookId or just delete by type and message pattern
+        # Delete related notification(s) - delete any 'reservation' type for this user
         cursor.execute('''
             DELETE FROM notifications 
             WHERE user_id = ? 
-            AND type = 'reservation' 
-            AND message LIKE '%successfully reserved%'
+            AND type = 'reservation'
         ''', (user_id,))
         
         print(f'Deleted {cursor.rowcount} reservation notification(s) for user {user_id}')
