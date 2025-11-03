@@ -1107,6 +1107,37 @@ def get_user_reservations(user_id):
     conn.close()
     return jsonify(reservation_list)
 
+@app.route('/api/user/<int:user_id>/reservations/all', methods=['GET'])
+def get_user_reservations_all(user_id):
+    """Return complete reservation history for a user (pending, approved, rejected), latest first."""
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT br.id, br.status, br.rejection_reason, b.title, b.author, b.id, br.requested_at, br.approved_at
+        FROM book_reservations br
+        JOIN books b ON br.book_id = b.id
+        WHERE br.user_id = ?
+        ORDER BY COALESCE(br.approved_at, br.requested_at) DESC
+    ''', (user_id,))
+    rows = cursor.fetchall()
+
+    result = []
+    for res in rows:
+        result.append({
+            'id': res[0],
+            'status': res[1],
+            'rejection_reason': res[2],
+            'book_title': res[3],
+            'book_author': res[4],
+            'book_id': res[5],
+            'requested_at': res[6],
+            'approved_at': res[7]
+        })
+
+    conn.close()
+    return jsonify(result)
+
 @app.route('/api/user-reservations/<int:user_id>', methods=['GET'])
 def get_user_reservation_status(user_id):
     conn = sqlite3.connect(DATABASE)
