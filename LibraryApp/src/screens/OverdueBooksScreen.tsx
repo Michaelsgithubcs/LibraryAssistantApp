@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Card } from '../components/Card';
 import { Badge } from '../components/Badge';
@@ -20,6 +21,13 @@ export const OverdueBooksScreen: React.FC<OverdueBooksScreenProps> = ({ user, na
   useEffect(() => {
     fetchOverdueBooks();
   }, []);
+
+  // Refresh when screen/tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchOverdueBooks();
+    }, [])
+  );
 
   const fetchOverdueBooks = async () => {
     try {

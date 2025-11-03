@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -36,6 +37,13 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
   useEffect(() => {
     fetchFines();
   }, []);
+
+  // Refresh when screen/tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchFines();
+    }, [])
+  );
 
   const fetchFines = async () => {
     try {

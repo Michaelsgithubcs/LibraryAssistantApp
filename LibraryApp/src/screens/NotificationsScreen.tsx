@@ -47,6 +47,13 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
     return () => clearInterval(interval);
   }, []);
 
+  // Explicitly fetch on screen focus to ensure latest notifications are shown immediately
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchNotifications();
+    }, [])
+  );
+
   // Mark notifications as read when user views them (not automatically on screen focus)
   // This allows the red dot to show for new notifications
   // Users can manually mark all as read using pull-to-refresh

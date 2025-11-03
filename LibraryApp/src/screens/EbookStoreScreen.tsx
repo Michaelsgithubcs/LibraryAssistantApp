@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Image, FlatList, Linking } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -32,6 +33,13 @@ export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, naviga
   useEffect(() => {
     fetchEbooks();
   }, []);
+
+  // Refresh ebooks when screen/tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEbooks();
+    }, [searchTerm])
+  );
 
   const fetchEbooks = async () => {
     try {
