@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -106,6 +106,25 @@ export const ReservationsScreen: React.FC<ReservationsScreenProps> = ({ user }) 
               <View style={styles.metaRow}>
                 <Text style={commonStyles.textMuted}>Reason</Text>
                 <Text style={[commonStyles.text, { color: colors.danger }]}>{r.rejection_reason}</Text>
+              </View>
+            )}
+            {r.status === 'pending' && (
+              <View style={{ marginTop: 12 }}>
+                <Button
+                  title="Cancel Reservation"
+                  variant="outline"
+                  onPress={async () => {
+                    try {
+                      const confirm = true; // Future: wrap with Alert.confirm if desired
+                      if (!confirm) return;
+                      await apiClient.cancelReservation(Number(r.id));
+                      Alert.alert('Success', `Reservation for "${r.book_title}" cancelled.`);
+                      loadReservations();
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to cancel reservation. Please try again.');
+                    }
+                  }}
+                />
               </View>
             )}
           </Card>

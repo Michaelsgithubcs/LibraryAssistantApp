@@ -221,7 +221,8 @@ export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, naviga
             <View style={{ height: 12 }} />
             <SkeletonBox width={120} height={36} />
           </Card>
-          <View style={styles.gridContainer}>
+          {/* Two-column skeleton grid with wrapping to ensure both left and right columns render */}
+          <View style={[styles.gridContainer, { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }]}>
             {Array.from({ length: 6 }).map((_, i) => (
               <View key={i} style={styles.bookCard}>
                 <SkeletonBox style={styles.bookCover} />

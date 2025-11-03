@@ -11,6 +11,7 @@ import { User, IssuedBook, ReservationStatus, HistoryItem } from '../types';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { removeNotification } from '../store/slices/notificationSlice';
+import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 
 interface BorrowedBooksScreenProps {
   user: User;
@@ -141,9 +142,38 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading your books...</Text>
-      </View>
+      <ScrollView style={commonStyles.container}>
+        <Card>
+          <Text style={commonStyles.subtitle}>Book History</Text>
+          <Text style={commonStyles.textSecondary}>View your current and past borrowed books</Text>
+          <View style={{ height: 12 }} />
+          {/* Tabs skeleton */}
+          <View style={styles.tabContainer}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <View key={i} style={[styles.tab, { paddingVertical: 10 }]}>
+                <SkeletonBox width={100} height={14} radius={7} />
+              </View>
+            ))}
+          </View>
+          {/* List skeleton items */}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <View key={i} style={styles.historyItem}>
+              <View style={styles.bookHeader}>
+                <View style={{ flex: 1 }}>
+                  <SkeletonBox width={'70%'} height={16} />
+                  <View style={{ height: 6 }} />
+                  <SkeletonBox width={'40%'} height={12} />
+                </View>
+                <SkeletonBox width={140} height={12} />
+              </View>
+              <View style={styles.bookActions}>
+                <SkeletonBox height={36} style={styles.actionButton as any} />
+                <SkeletonBox height={36} style={styles.actionButton as any} />
+              </View>
+            </View>
+          ))}
+        </Card>
+      </ScrollView>
     );
   }
 
