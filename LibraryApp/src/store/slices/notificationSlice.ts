@@ -50,6 +50,10 @@ const notificationSlice = createSlice({
       });
       state.unreadCount = 0;
     },
+    setUnreadCount: (state, action: PayloadAction<number>) => {
+      // Directly set unread count from backend or recomputation
+      state.unreadCount = Math.max(0, action.payload);
+    },
     removeNotification: (state, action: PayloadAction<string>) => {
       const index = state.notifications.findIndex(n => n.id === action.payload);
       if (index !== -1) {
@@ -70,6 +74,7 @@ export const {
   addNotification, 
   markAsRead, 
   markAllAsRead, 
+  setUnreadCount,
   removeNotification, 
   clearAllNotifications 
 } = notificationSlice.actions;

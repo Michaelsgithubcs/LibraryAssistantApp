@@ -9,8 +9,9 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook, Fine, Book, ReservationStatus } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
+import { setUnreadCount } from '../store/slices/notificationSlice';
 
 // Using the updated Book interface from types
 
@@ -21,6 +22,7 @@ interface DashboardScreenProps {
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigation }) => {
   const { showNotification } = useNotifications();
+  const dispatch = useDispatch();
   const reduxNotifications = useSelector((state: RootState) => state.notifications.notifications);
   const [stats, setStats] = useState({
     booksIssued: 0,
@@ -56,8 +58,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     const notificationInterval = setInterval(() => {
       checkForNewNotifications();
     }, 15000);
+    // Also poll backend unread count so badge/red dot updates even before opening the notifications screen
+    const unreadInterval = setInterval(() => {
+      refreshUnreadCount();
+    }, 30000);
     
-    return () => clearInterval(notificationInterval);
+    // Initial unread count fetch on mount
+    refreshUnreadCount();
+    
+    return () => {
+      clearInterval(notificationInterval);
+      clearInterval(unreadInterval);
+    };
   }, []);
   
   const checkForNewNotifications = async () => {
@@ -194,6 +206,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       } catch (fallbackError) {
         console.error('Fallback error:', fallbackError);
       }
+    }
+  };
+
+  // Pull unread notifications from backend and update global badge
+  const refreshUnreadCount = async () => {
+    try {
+      const { notificationApi } = await import('../services/api');
+      const list = await notificationApi.getUserNotifications(user.id);
+      const unread = Array.isArray(list) ? list.filter((n: any) => n.is_read === 0).length : 0;
+      dispatch(setUnreadCount(unread));
+    } catch (e) {
+      console.log('Error refreshing unread count:', e);
     }
   };
 

@@ -4,6 +4,11 @@ import sqlite3
 import os
 import sys
 from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+    TZ_JHB = ZoneInfo("Africa/Johannesburg")
+except Exception:
+    TZ_JHB = None
 import hashlib
 import secrets
 import google.generativeai as genai
@@ -1190,7 +1195,7 @@ def approve_reservation(request_id):
         cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
         
         # Update reservation status with local timestamp
-        local_timestamp = datetime.now().isoformat()
+    local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
         cursor.execute('''
             UPDATE book_reservations 
             SET status = 'approved', approved_at = ?, approved_by = ?, viewed = 0
@@ -1238,7 +1243,7 @@ def reject_reservation(request_id):
     cursor = conn.cursor()
     
     try:
-        local_timestamp = datetime.now().isoformat()
+    local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
         cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = ?, viewed = 0 WHERE id = ?', (reason, local_timestamp, request_id))
         
         # Get reservation details for notification
@@ -1360,7 +1365,7 @@ def create_notification(user_id):
             data.get('title'),
             data.get('message'),
             data.get('data', ''),
-            data.get('timestamp', datetime.now().isoformat())
+            data.get('timestamp', (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat()))
         ))
         
         notification_id = cursor.lastrowid

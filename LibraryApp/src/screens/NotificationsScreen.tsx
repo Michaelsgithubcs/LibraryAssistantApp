@@ -17,7 +17,7 @@ import { commonStyles } from '../styles/common';
 import { User } from '../types';
 import { apiClient } from '../services/api';
 import { useDispatch } from 'react-redux';
-import { markAllAsRead } from '../store/slices/notificationSlice';
+import { markAllAsRead, setUnreadCount } from '../store/slices/notificationSlice';
 
 interface NotificationsScreenProps {
   user: User;
@@ -116,6 +116,10 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         read: n.is_read === 1,
         data: n.data ? JSON.parse(n.data) : {}
       }));
+
+      // Update unread badge count from backend data immediately
+      const backendUnread = backendNotifications.filter(n => !n.read).length;
+      dispatch(setUnreadCount(backendUnread));
       
       const [reservations, myBooks, fines, books] = await Promise.all([
         apiClient.getReservationStatus(user.id),
@@ -294,6 +298,10 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         console.log(`Backend: ${backendNotifications.length}, Generated: ${notificationList.length}, Recent Redux: ${recentReduxNotifications.length}`);
         console.log('Notification types:', deduplicatedNotifications.map(n => `${n.type}: ${n.title}`));
         setNotifications(deduplicatedNotifications);
+
+        // Recompute unread count based on final list
+        const totalUnread = deduplicatedNotifications.filter(n => !n.read).length;
+        dispatch(setUnreadCount(totalUnread));
       } else {
         console.log('Notifications unchanged, skipping update');
       }
