@@ -52,6 +52,7 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
       type: data?.type || 'reservation',
       title,
       message,
+      // Use device local time for immediate UI; backend will store authoritative created_at with server TZ
       timestamp: data?.timestamp || new Date().toISOString(),
       data
     };
@@ -69,8 +70,8 @@ const NotificationProvider: React.FC<NotificationProviderProps> = ({ children })
           title: notification.title,
           message: notification.message,
           data: JSON.stringify(notification.data || {}),
-          timestamp: notification.timestamp,
-        });
+          // Omit timestamp so backend uses timezone-aware server time
+        } as any);
         console.log('Notification saved to backend database');
       }
     } catch (error) {
