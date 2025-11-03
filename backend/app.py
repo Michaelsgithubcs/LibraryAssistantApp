@@ -1190,7 +1190,6 @@ def approve_reservation(request_id):
         cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
         
         # Update reservation status with local timestamp
-        from datetime import datetime
         local_timestamp = datetime.now().isoformat()
         cursor.execute('''
             UPDATE book_reservations 
@@ -1239,7 +1238,6 @@ def reject_reservation(request_id):
     cursor = conn.cursor()
     
     try:
-        from datetime import datetime
         local_timestamp = datetime.now().isoformat()
         cursor.execute('UPDATE book_reservations SET status = "rejected", rejection_reason = ?, approved_at = ?, viewed = 0 WHERE id = ?', (reason, local_timestamp, request_id))
         

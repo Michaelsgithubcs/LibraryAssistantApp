@@ -31,6 +31,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   const [refreshing, setRefreshing] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest'); // Default to newest first
   const [isFetching, setIsFetching] = useState(false); // Prevent recursive fetches
+  const [isLoading, setIsLoading] = useState(true); // Show loading state initially
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -51,9 +52,28 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   // Users can manually mark all as read using pull-to-refresh
   useFocusEffect(
     React.useCallback(() => {
-      // Removed automatic mark-all-as-read on screen focus
-      // Let users see unread notifications with red dots
-      console.log("NotificationsScreen focused - NOT auto-marking as read");
+      // Mark all notifications as read when screen is opened
+      const markAllRead = async () => {
+        const unreadNotifications = notifications.filter(n => !n.read);
+        if (unreadNotifications.length > 0) {
+          console.log(`Marking ${unreadNotifications.length} notifications as read`);
+          
+          // Mark as read in Redux immediately for instant UI update
+          dispatch(markAllAsRead());
+          
+          // Mark as read in backend database
+          const { notificationApi } = await import('../services/api');
+          for (const notification of unreadNotifications) {
+            // Only mark backend notifications (numeric IDs after removing 'db-' prefix)
+            if (notification.id.toString().startsWith('db-')) {
+              const dbId = parseInt(notification.id.toString().replace('db-', ''));
+              await notificationApi.markNotificationRead(dbId);
+            }
+          }
+        }
+      };
+      
+      markAllRead();
     }, [notifications, dispatch])
   );
 
@@ -281,6 +301,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       console.error('Error fetching notifications:', error);
     } finally {
       setIsFetching(false);
+      setIsLoading(false); // Done loading
     }
   };
 
@@ -441,7 +462,11 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {sortedNotifications.length > 0 ? (
+        {isLoading ? (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, color: '#666' }}>Loading notifications...</Text>
+          </View>
+        ) : sortedNotifications.length > 0 ? (
           sortedNotifications.map((notification) => (
             <ModernCard 
               key={notification.id} 
