@@ -62,105 +62,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
   
   const checkForNewNotifications = async () => {
     try {
+      // Backend now creates notifications for approved/rejected reservations
+      // This just updates local state for display purposes
       const reservations = await apiClient.getReservationStatus(user.id);
-      const fines = await apiClient.getMyFines(user.id);
-      const myBooks = await apiClient.getMyBooks(user.id);
-      
-      // Get backend notifications to check against as well
-      const { notificationApi } = await import('../services/api');
-      const backendNotifications = await notificationApi.getUserNotifications(user.id);
-      
-      // Check for approved and rejected reservations
-      // Only process recent reservations (within last 7 days) to avoid old timestamps
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      reservations.forEach((reservation) => {
-        // Skip if no timestamp or too old
-        const resDate = reservation.approved_at ? new Date(reservation.approved_at) : 
-                       reservation.requested_at ? new Date(reservation.requested_at) : null;
-        if (!resDate || resDate < sevenDaysAgo) {
-          console.log(`Skipping old reservation: ${reservation.book_title} (${resDate})`);
-          return;
-        }
-        
-        if (reservation.status === 'approved') {
-          // Check if we already have a notification for this approved reservation
-          // Check both Redux store AND backend database
-          const existingInRedux = reduxNotifications.find(n => 
-            n.type === 'reservation_approved' && 
-            (n.data?.reservationId === reservation.id || 
-             n.message.includes(reservation.book_title))
-          );
-          
-          const existingInBackend = backendNotifications.find((n: any) => 
-            n.type === 'reservation_approved' && 
-            (n.message.includes(reservation.book_title) ||
-             (n.data && JSON.parse(n.data)?.reservationId === reservation.id))
-          );
-          
-          if (!existingInRedux && !existingInBackend) {
-            const approvedTime = reservation.approved_at || new Date().toISOString();
-            console.log(`Creating approved notification for: ${reservation.book_title}`);
-            console.log(`Approved timestamp from backend: ${reservation.approved_at}`);
-            console.log(`Using timestamp: ${approvedTime}`);
-            console.log(`Parsed as date: ${new Date(approvedTime).toLocaleString()}`);
-            
-            showNotification(
-              'Reservation Approved!',
-              `Your reservation for "${reservation.book_title}" has been approved! You can now pick it up.`,
-              { 
-                type: 'reservation_approved', 
-                bookId: reservation.book_id, 
-                bookTitle: reservation.book_title, 
-                userId: user.id, 
-                reservationId: reservation.id,
-                timestamp: approvedTime
-              }
-            );
-          } else {
-            console.log(`Notification already exists for: ${reservation.book_title}`);
-          }
-        } else if (reservation.status === 'rejected') {
-          // Check if we already have a notification for this rejected reservation
-          const existingInRedux = reduxNotifications.find(n => 
-            n.type === 'reservation_rejected' && 
-            (n.data?.reservationId === reservation.id || 
-             n.message.includes(reservation.book_title))
-          );
-          
-          const existingInBackend = backendNotifications.find((n: any) => 
-            n.type === 'reservation_rejected' && 
-            (n.message.includes(reservation.book_title) ||
-             (n.data && JSON.parse(n.data)?.reservationId === reservation.id))
-          );
-          
-          if (!existingInRedux && !existingInBackend) {
-            console.log(`Creating rejected notification for: ${reservation.book_title}`);
-            const reason = reservation.rejection_reason ? ` Reason: ${reservation.rejection_reason}` : '';
-            showNotification(
-              'Reservation Rejected',
-              `Your reservation for "${reservation.book_title}" was rejected.${reason}`,
-              { 
-                type: 'reservation_rejected', 
-                bookId: reservation.book_id, 
-                bookTitle: reservation.book_title, 
-                userId: user.id, 
-                reservationId: reservation.id,
-                rejectionReason: reservation.rejection_reason,
-                timestamp: reservation.approved_at || new Date().toISOString() // Same field used for rejection time
-              }
-            );
-          } else {
-            console.log(`Rejection notification already exists for: ${reservation.book_title}`);
-          }
-        }
-      });
-      
-      // Update local state
       setUserReservations(reservations);
     } catch (error) {
-      console.log('Error checking for new notifications:', error);
+      console.log('Error checking reservations:', error);
     }
   };
 

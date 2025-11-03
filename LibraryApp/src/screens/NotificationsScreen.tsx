@@ -215,69 +215,45 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
       
       // Merge: backend + recent redux + newly generated
       [...backendNotifications, ...recentReduxNotifications, ...notificationList].forEach(notif => {
-        // Create a unique key based on notification type and relevant data
-        let uniqueKey = notif.id;
+        // Use notification ID as unique key - this preserves ALL notifications from database
+        // Backend notifications have numeric IDs, Redux notifications have string IDs
+        let uniqueKey = notif.id?.toString() || `temp-${Date.now()}-${Math.random()}`;
         
-        // For reservation notifications, use reservationId or bookTitle to prevent duplicates
-        if (notif.type === 'reservation' || notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
-          const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
-          const reservationId = notif.data?.reservationId || '';
-          uniqueKey = `${notif.type}-${reservationId || bookTitle}`;
-          
-          if (notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
-            console.log(`Processing ${notif.type}: uniqueKey=${uniqueKey}, reservationId=${reservationId}, timestamp=${notif.created_at}`);
+        // Only deduplicate if it's a Redux notification without an ID (not yet saved to backend)
+        if (!notif.id || typeof notif.id === 'string') {
+          // For unsaved reservation notifications, prevent duplicate creation
+          if (notif.type === 'reservation' || notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
+            const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
+            const reservationId = notif.data?.reservationId || '';
+            uniqueKey = `temp-${notif.type}-${reservationId || bookTitle}`;
+          }
+          // For unsaved due/overdue notifications
+          else if (notif.type === 'due_soon' || notif.type === 'overdue') {
+            const bookId = notif.data?.id || notif.data?.book_id || '';
+            uniqueKey = `temp-${notif.type}-${bookId}`;
+          }
+          // For unsaved fine notifications
+          else if (notif.type === 'fine') {
+            const fineId = notif.data?.id || '';
+            uniqueKey = `temp-${notif.type}-${fineId}`;
           }
         }
-        // For due/overdue notifications, use book ID
-        else if (notif.type === 'due_soon' || notif.type === 'overdue') {
-          const bookId = notif.data?.id || notif.data?.book_id || '';
-          uniqueKey = `${notif.type}-${bookId}`;
-        }
-        // For fine notifications, use fine ID
-        else if (notif.type === 'fine') {
-          const fineId = notif.data?.id || '';
-          uniqueKey = `${notif.type}-${fineId}`;
-        }
         
-        // Keep notification with preference based on type
+        // Add to map - only deduplicate exact duplicates (same uniqueKey)
         const existing = notificationMap.get(uniqueKey);
         if (!existing) {
+          // New notification - add it
           notificationMap.set(uniqueKey, notif);
         } else {
-          // Prefer backend notifications (id starts with "db-")
-          const isNewFromBackend = notif.id.startsWith('db-');
-          const isExistingFromBackend = existing.id.startsWith('db-');
+          // Duplicate found - prefer backend notification (numeric ID) over Redux (string ID)
+          const isNewFromBackend = typeof notif.id === 'number';
+          const isExistingFromBackend = typeof existing.id === 'number';
           
           if (isNewFromBackend && !isExistingFromBackend) {
-            // Backend always wins over non-backend
+            // Backend notification replaces Redux notification
             notificationMap.set(uniqueKey, notif);
-          } else if (!isNewFromBackend && isExistingFromBackend) {
-            // Keep existing backend notification
-            // Do nothing
-          } else {
-            // Both from same source - decide based on notification type
-            const newTime = new Date(notif.timestamp).getTime();
-            const existingTime = new Date(existing.timestamp).getTime();
-            
-            if (notif.type === 'reservation') {
-              // For "Reservation Sent", keep the NEWEST (latest reservation)
-              if (newTime > existingTime) {
-                console.log(`Replacing ${notif.type} with newer: ${new Date(newTime).toLocaleString()} vs ${new Date(existingTime).toLocaleString()}`);
-                notificationMap.set(uniqueKey, notif);
-              }
-            } else if (notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
-              // For approved/rejected, keep the NEWEST (most recent status update)
-              if (newTime > existingTime) {
-                console.log(`Replacing ${notif.type} with newer: ${new Date(newTime).toLocaleString()} vs ${new Date(existingTime).toLocaleString()}`);
-                notificationMap.set(uniqueKey, notif);
-              }
-            } else {
-              // For other types (due dates, fines), keep OLDEST (original event)
-              if (newTime < existingTime) {
-                notificationMap.set(uniqueKey, notif);
-              }
-            }
           }
+          // Otherwise keep existing (backend always wins, or keep first Redux if both Redux)
         }
       });
       
