@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import ReactNative from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -25,6 +27,13 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
   useEffect(() => {
     fetchBooks();
   }, []);
+
+  // Refetch when user navigates back to Books tab
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchBooks();
+    }, [])
+  );
 
   const fetchBooks = async () => {
     try {

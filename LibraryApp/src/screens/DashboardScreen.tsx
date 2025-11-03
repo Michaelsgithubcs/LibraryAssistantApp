@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Image, TouchableOpacity, Alert } from 'react-native';
 import { ModernCard } from '../components/ModernCard';
 import { AdminCard } from '../components/AdminCard';
@@ -71,6 +72,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       clearInterval(unreadInterval);
     };
   }, []);
+  
+  // Refresh dashboard immediately when Home tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDashboardData();
+      checkForNewNotifications();
+      refreshUnreadCount();
+    }, [])
+  );
   
   const checkForNewNotifications = async () => {
     try {
