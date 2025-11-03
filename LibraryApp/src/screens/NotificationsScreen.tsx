@@ -13,6 +13,7 @@ import AllCaughtUpIcon from '../../assets/icons/notifications icons/allcoughtup.
 import { ModernCard } from '../components/ModernCard';
 import { Button } from '../components/Button';
 import { colors } from '../styles/colors';
+import { SkeletonCircle, SkeletonLines, SkeletonBox } from '../components/Skeleton';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
 import { apiClient } from '../services/api';
@@ -50,7 +51,11 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
   // Explicitly fetch on screen focus to ensure latest notifications are shown immediately
   useFocusEffect(
     React.useCallback(() => {
-      fetchNotifications();
+      // Small delay to avoid race with mark-all-read on focus
+      const t = setTimeout(() => {
+        fetchNotifications();
+      }, 300);
+      return () => clearTimeout(t);
     }, [])
   );
 
@@ -67,6 +72,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
           
           // Mark as read in Redux immediately for instant UI update
           dispatch(markAllAsRead());
+          // Clamp badge to 0 immediately to prevent flicker while backend catches up
+          dispatch(setUnreadCount(0));
           
           // Mark as read in backend database
           const { notificationApi } = await import('../services/api');
@@ -162,7 +169,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               title: 'Book Due in 2 Days',
               message: `"${book.title}" is due in 2 days (${new Date(book.due_date).toLocaleDateString()}). Please return it on time to avoid fines.`,
               timestamp: notificationDate.toISOString(),
-              read: false,
+              // Synthetic reminders should not affect unread badge
+              read: true,
               data: book
             };
             notificationList.push(notification);
@@ -177,7 +185,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               title: 'Book Due Tomorrow',
               message: `"${book.title}" is due tomorrow (${new Date(book.due_date).toLocaleDateString()}). Please return it to avoid fines.`,
               timestamp: notificationDate.toISOString(),
-              read: false,
+              // Synthetic reminders should not affect unread badge
+              read: true,
               data: book
             };
             notificationList.push(notification);
@@ -191,7 +200,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
               title: 'Book Overdue!',
               message: `"${book.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue. Fine: R${fineAmount.toFixed(2)}. Please return immediately.`,
               timestamp: book.due_date || new Date().toISOString(),
-              read: false,
+              // Synthetic reminders should not affect unread badge
+              read: true,
               data: { ...book, daysOverdue, fineAmount }
             };
             notificationList.push(notification);
@@ -210,7 +220,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
             title: 'Outstanding Fine',
             message: `You have an outstanding fine of R${totalFine.toFixed(2)} for "${fine.bookTitle}". ${reason}`,
             timestamp: fine.dueDate || fine.issueDate || new Date().toISOString(),
-            read: false,
+            // Synthetic reminders should not affect unread badge
+            read: true,
             data: fine
           };
           notificationList.push(notification);
@@ -305,10 +316,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         console.log(`Backend: ${backendNotifications.length}, Generated: ${notificationList.length}, Recent Redux: ${recentReduxNotifications.length}`);
         console.log('Notification types:', deduplicatedNotifications.map(n => `${n.type}: ${n.title}`));
         setNotifications(deduplicatedNotifications);
-
-        // Recompute unread count based on final list
-        const totalUnread = deduplicatedNotifications.filter(n => !n.read).length;
-        dispatch(setUnreadCount(totalUnread));
+        // Keep unread count sourced from backend only to avoid flicker from synthetic items
       } else {
         console.log('Notifications unchanged, skipping update');
       }
@@ -478,8 +486,22 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, 
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {isLoading ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, color: '#666' }}>Loading notifications...</Text>
+          <View style={{ paddingHorizontal: 16 }}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <ModernCard key={idx} variant="elevated" style={styles.notificationCard}>
+                <View style={styles.notificationHeader}>
+                  <SkeletonCircle style={{ marginRight: 16 }} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonLines lines={1} lineHeight={16} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLines lines={2} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonBox width={100} height={10} />
+                  </View>
+                </View>
+                <SkeletonBox width={120} height={36} radius={18} />
+              </ModernCard>
+            ))}
           </View>
         ) : sortedNotifications.length > 0 ? (
           sortedNotifications.map((notification) => (

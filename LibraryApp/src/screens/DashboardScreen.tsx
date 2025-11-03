@@ -9,6 +9,7 @@ import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook, Fine, Book, ReservationStatus } from '../types';
+import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 import { useNotifications } from '../components/NotificationProvider';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
@@ -611,7 +612,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
   
   const handleReservationsPress = () => {
     if (stats.reservations > 0) {
-      navigation.navigate('BorrowedBooks');
+        navigation.navigate('Reservations');
     } else {
       Alert.alert('No Reservations', 'You have no pending book reservations.');
     }
@@ -819,10 +820,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             </View>
           </View>
           {loadingRecommendations ? (
-            <View style={{ alignItems: 'center', marginVertical: 16 }}>
-              <Text style={styles.mlHelpText}>
-                Loading ML recommendations...
-              </Text>
+            <View>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <View key={i} style={styles.bookRecommendation}>
+                  <View style={styles.bookInfo}>
+                    <SkeletonBox width={'70%'} height={16} />
+                    <View style={{ height: 6 }} />
+                    <SkeletonBox width={'40%'} height={12} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLines lines={1} />
+                  </View>
+                  <SkeletonBox width={120} height={36} radius={6} />
+                </View>
+              ))}
             </View>
           ) : (
             recommendedBooks.map((book) => {
@@ -858,10 +868,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
           <Text style={styles.sectionSubtitle}>Recently added to the library</Text>
           
           {refreshing ? (
-            <View style={{ alignItems: 'center', marginVertical: 16 }}>
-              <Text style={styles.mlHelpText}>
-                Loading new books...
-              </Text>
+            <View>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <View key={i} style={styles.bookRecommendation}>
+                  <View style={styles.bookInfo}>
+                    <SkeletonBox width={'70%'} height={16} />
+                    <View style={{ height: 6 }} />
+                    <SkeletonBox width={'40%'} height={12} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLines lines={1} />
+                  </View>
+                  <SkeletonBox width={120} height={36} radius={6} />
+                </View>
+              ))}
             </View>
           ) : (
             newBooks.map((book) => {

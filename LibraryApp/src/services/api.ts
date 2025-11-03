@@ -131,6 +131,18 @@ export const apiClient = {
     }
   },
 
+  async getReservationHistory(userId: number): Promise<ReservationStatus[]> {
+    try {
+      const response = await fetch(`${API_BASE}/user/${userId}/reservations/all`);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.log('Reservation history error:', error);
+      return [];
+    }
+  },
+
   async reserveBook(bookId: string, userId: number): Promise<{ message: string }> {
     try {
       console.log(`API Request: Reserving book ${bookId} for user ${userId}`);

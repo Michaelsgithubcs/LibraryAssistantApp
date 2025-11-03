@@ -8,6 +8,7 @@ import { Badge } from '../components/Badge';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
+import { SkeletonLines, SkeletonBox } from '../components/Skeleton';
 
 interface Fine {
   id: string;
@@ -121,8 +122,34 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading fines...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            {user.role === 'admin' ? 'Fines Management' : 'My Fines'}
+          </Text>
+        </View>
+        <ScrollView style={styles.content}>
+          <Card>
+            <SkeletonLines lines={1} lineHeight={20} />
+            <View style={{ height: 8 }} />
+            <SkeletonBox width={120} height={32} />
+            <View style={{ height: 8 }} />
+            <SkeletonBox width={180} height={12} />
+          </Card>
+          <Card>
+            <SkeletonLines lines={1} lineHeight={20} />
+            <View style={{ height: 12 }} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <View key={i} style={{ paddingVertical: 12, borderBottomWidth: i===3?0:1, borderBottomColor: colors.border }}>
+                <SkeletonLines lines={2} />
+                <View style={{ height: 8 }} />
+                <SkeletonBox width={140} height={12} />
+                <View style={{ height: 12 }} />
+                <SkeletonBox width={120} height={32} radius={6} />
+              </View>
+            ))}
+          </Card>
+        </ScrollView>
       </View>
     );
   }

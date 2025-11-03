@@ -35,6 +35,7 @@ import { BookChatScreen } from './src/screens/BookChatScreen';
 import { MoreScreen } from './src/screens/MoreScreen';
 import { OverdueBooksScreen } from './src/screens/OverdueBooksScreen';
 import { BorrowedBooksScreen } from './src/screens/BorrowedBooksScreen';
+import { ReservationsScreen } from './src/screens/ReservationsScreen';
 
 import { colors } from './src/styles/colors';
 import { useDispatch, useSelector } from 'react-redux';
@@ -297,6 +298,12 @@ const MainNavigator = ({ user }: { user: any }) => {
         options={{ title: 'My Fines' }}
       >
         {(props) => <FinesScreen {...props} user={user} />}
+      </Stack.Screen>
+      <Stack.Screen 
+        name="Reservations" 
+        options={{ title: 'Reservations' }}
+      >
+        {(props) => <ReservationsScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="BorrowedBooks" 

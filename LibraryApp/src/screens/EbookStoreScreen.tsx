@@ -8,6 +8,7 @@ import { Badge } from '../components/Badge';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
+import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 
 interface EbookStoreScreenProps {
   user: User;
@@ -208,8 +209,33 @@ export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, naviga
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading ebooks...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>EStore</Text>
+        </View>
+        <View style={styles.content}>
+          <Card>
+            <SkeletonLines lines={2} />
+            <View style={{ height: 12 }} />
+            <SkeletonBox height={40} />
+            <View style={{ height: 12 }} />
+            <SkeletonBox width={120} height={36} />
+          </Card>
+          <View style={styles.gridContainer}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View key={i} style={styles.bookCard}>
+                <SkeletonBox style={styles.bookCover} />
+                <SkeletonBox width={'80%'} height={14} />
+                <View style={{ height: 6 }} />
+                <SkeletonBox width={'60%'} height={12} />
+                <View style={{ height: 6 }} />
+                <SkeletonBox width={50} height={12} />
+                <View style={{ height: 8 }} />
+                <SkeletonBox width={80} height={28} radius={6} />
+              </View>
+            ))}
+          </View>
+        </View>
       </View>
     );
   }

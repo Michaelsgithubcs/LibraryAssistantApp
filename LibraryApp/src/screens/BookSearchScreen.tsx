@@ -11,6 +11,7 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, Book } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
+import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 
 interface BookSearchScreenProps {
   user: User;
@@ -108,8 +109,35 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading books...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Search</Text>
+        </View>
+        <View style={styles.content}>
+          <Card>
+            <SkeletonLines lines={2} />
+            <View style={{ height: 12 }} />
+            <SkeletonBox height={40} />
+          </Card>
+          <ScrollView style={{ flex: 1 }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <View style={styles.bookHeader}>
+                  <View style={{ flex: 1 }}>
+                    <SkeletonBox width={'70%'} height={16} />
+                    <View style={{ height: 6 }} />
+                    <SkeletonBox width={'40%'} height={12} />
+                  </View>
+                  <SkeletonBox width={70} height={22} radius={11} />
+                </View>
+                <View style={styles.bookDetails}>
+                  <SkeletonLines lines={2} />
+                </View>
+                <SkeletonBox width={'100%'} height={36} radius={6} />
+              </Card>
+            ))}
+          </ScrollView>
+        </View>
       </View>
     );
   }

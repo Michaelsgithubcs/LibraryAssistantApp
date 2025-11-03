@@ -11,6 +11,7 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, Book, ReservationStatus, IssuedBook } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
+import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 
 interface MyBooksScreenProps {
   user: User;
@@ -163,8 +164,33 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading books...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Books</Text>
+        </View>
+        <View style={styles.content}>
+          <Card>
+            <SkeletonLines lines={2} />
+            <View style={{ height: 12 }} />
+            <SkeletonBox height={40} />
+          </Card>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <SkeletonBox width={'70%'} height={16} />
+                  <View style={{ height: 6 }} />
+                  <SkeletonBox width={'40%'} height={12} />
+                </View>
+                <SkeletonBox width={70} height={22} radius={11} />
+              </View>
+              <View style={{ marginBottom: 12 }}>
+                <SkeletonLines lines={2} />
+              </View>
+              <SkeletonBox width={'100%'} height={36} radius={6} />
+            </Card>
+          ))}
+        </View>
       </View>
     );
   }

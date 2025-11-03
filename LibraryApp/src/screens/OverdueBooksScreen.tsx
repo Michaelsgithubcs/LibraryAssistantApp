@@ -7,6 +7,7 @@ import { apiClient } from '../services/api';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User, IssuedBook } from '../types';
+import { SkeletonLines, SkeletonBox } from '../components/Skeleton';
 
 interface OverdueBooksScreenProps {
   user: User;
@@ -62,9 +63,26 @@ export const OverdueBooksScreen: React.FC<OverdueBooksScreenProps> = ({ user, na
 
   if (loading) {
     return (
-      <View style={[commonStyles.container, commonStyles.center]}>
-        <Text>Loading overdue books...</Text>
-      </View>
+      <ScrollView style={commonStyles.container}>
+        <Card>
+          <SkeletonLines lines={2} />
+        </Card>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <SkeletonBox width={'70%'} height={16} />
+                <View style={{ height: 6 }} />
+                <SkeletonBox width={'40%'} height={12} />
+              </View>
+              <SkeletonBox width={70} height={22} radius={11} />
+            </View>
+            <SkeletonLines lines={3} />
+            <View style={{ height: 12 }} />
+            <SkeletonBox width={'100%'} height={44} radius={8} />
+          </Card>
+        ))}
+      </ScrollView>
     );
   }
 

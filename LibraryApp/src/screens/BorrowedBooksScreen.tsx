@@ -19,7 +19,6 @@ interface BorrowedBooksScreenProps {
 
 export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, navigation }) => {
   const [myBooks, setMyBooks] = useState<IssuedBook[]>([]);
-  const [reservations, setReservations] = useState<ReservationStatus[]>([]);
   const [readHistory, setReadHistory] = useState<HistoryItem[]>([]);
   const [returnedBooks, setReturnedBooks] = useState<HistoryItem[]>([]);
   const [activeTab, setActiveTab] = useState<'borrowed' | 'returned' | 'read'>('borrowed');
@@ -46,7 +45,7 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
       // Fetch all book data, including borrowed, returned and read books
       const [issuedAndReturnedBooks, reservationsData, readBooksHistory] = await Promise.all([
         apiClient.getMyBooks(user.id),
-        apiClient.getReservationStatus(user.id),
+        Promise.resolve([]),
         apiClient.getReadHistory(user.id)
       ]);
       
@@ -62,7 +61,7 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
       setReturnedBooks(completeHistory.filter((book: HistoryItem) =>
         book.status === 'returned' && 
         (!book.reading_progress || book.reading_progress < 100)
-      ));      setReservations(reservationsData);
+  ));
       
       // Books that have been explicitly marked as read (100% progress)
       setReadHistory(readBooksHistory || []);
@@ -153,46 +152,7 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
       style={commonStyles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {/* Reservation Status */}
-      {reservations.length > 0 && (
-        <Card>
-          <Text style={commonStyles.subtitle}>Reservation Updates</Text>
-          {reservations.map((reservation) => (
-            <View key={reservation.id} style={styles.reservationItem}>
-              <View style={commonStyles.row}>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: reservation.status === 'approved' ? colors.success : colors.danger }
-                ]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={commonStyles.text}>{reservation.book_title}</Text>
-                  <Text style={commonStyles.textSecondary}>by {reservation.book_author}</Text>
-                  <Text style={[
-                    commonStyles.textSecondary,
-                    { color: reservation.status === 'approved' ? colors.success : 
-                             reservation.status === 'rejected' ? colors.danger : colors.warning }
-                  ]}>
-                    {reservation.status === 'approved' 
-                      ? 'Approved - Book issued to you!' 
-                      : reservation.status === 'rejected'
-                      ? `Rejected${reservation.rejection_reason ? ': ' + reservation.rejection_reason : ''}`
-                      : 'Pending approval'
-                    }
-                  </Text>
-                  {reservation.status === 'pending' && (
-                    <Button
-                      title="Cancel Reservation"
-                      onPress={() => handleCancelReservation(Number(reservation.id), reservation.book_title)}
-                      variant="outline"
-                      style={{ marginTop: 8, paddingVertical: 6 }}
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
-          ))}
-        </Card>
-      )}
+      {/* Reservation content removed from BorrowedBooks; use Reservations screen */}
 
       {/* Book History with Tabs */}
       <Card>
