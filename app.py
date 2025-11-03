@@ -19,7 +19,12 @@ app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
 
-DATABASE = 'library.db'
+# Database path: allow overriding via env var so we can attach a Persistent Disk on Render
+DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
+# Ensure directory exists if a directory component is present
+db_dir = os.path.dirname(DATABASE)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
 
 # Configure Gemini API key from env if present
 GENAI_API_KEY = os.environ.get('GEMINI_API_KEY')
