@@ -8,14 +8,15 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
-import { IssuedBook } from '../types';
-import { askBookAssistant } from '../services/api';
+import { IssuedBook, User } from '../types';
+import { askBookAssistant, apiClient } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface BookChatScreenProps {
   route: {
     params: {
       book: IssuedBook;
+      user?: User;
     };
   };
   navigation: any;
@@ -30,11 +31,12 @@ interface Message {
 }
 
 export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigation }) => {
-  const { book } = route.params;
+  const { book, user } = route.params;
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const translateXRefs = useRef<Animated.Value[]>([]);
 
@@ -47,39 +49,76 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
 
   useEffect(() => {
     const loadHistory = async () => {
-      const key = `chat:${book.id}`;
-      const raw = await AsyncStorage.getItem(key);
-      if (raw) {
-        const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
-          ...m,
-          timestamp: new Date(m.timestamp),
-        }));
-        setMessages(parsed);
-      } else {
-        setMessages([
-          {
-            id: 'welcome',
-            text: `📖 Welcome to your book discussion for "${book.title}" by ${book.author}!\n\nI can help you with:\n• Character analysis and development\n• Plot discussions and themes\n• Chapter summaries\n• Reading comprehension\n• Discussion questions\n• And more...\n\nWhat would you like to explore about this book?`,
-            isUser: false,
-            timestamp: new Date(),
-          },
-        ]);
+      try {
+        // Get user from storage if not passed
+        let currentUser = user;
+        if (!currentUser) {
+          const userStr = await AsyncStorage.getItem('user');
+          if (userStr) {
+            currentUser = JSON.parse(userStr);
+          }
+        }
+
+        if (!currentUser) {
+          // No user logged in - use local storage fallback
+          const key = `chat:${book.id}`;
+          const raw = await AsyncStorage.getItem(key);
+          if (raw) {
+            const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            }));
+            setMessages(parsed);
+          } else {
+            setWelcomeMessage();
+          }
+          return;
+        }
+
+        // Create or get conversation from database
+        const conversation = await apiClient.createConversation(
+          currentUser.id,
+          'book',
+          parseInt(book.id),
+          `${book.title} Discussion`
+        );
+        setConversationId(conversation.id);
+
+        // Load messages from database
+        const dbMessages = await apiClient.getMessages(conversation.id);
+        if (dbMessages.length > 0) {
+          const parsed: Message[] = dbMessages.map((m: any) => ({
+            id: m.id.toString(),
+            text: m.message_text,
+            isUser: m.is_user_message,
+            timestamp: new Date(m.created_at),
+          }));
+          setMessages(parsed);
+        } else {
+          setWelcomeMessage();
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+        setWelcomeMessage();
       }
     };
     loadHistory();
   }, [book.id]);
 
+  const setWelcomeMessage = () => {
+    setMessages([
+      {
+        id: 'welcome',
+        text: `📖 Welcome to your book discussion for "${book.title}" by ${book.author}!\n\nI can help you with:\n• Character analysis and development\n• Plot discussions and themes\n• Chapter summaries\n• Reading comprehension\n• Discussion questions\n• And more...\n\nWhat would you like to explore about this book?`,
+        isUser: false,
+        timestamp: new Date(),
+      },
+    ]);
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  useEffect(() => {
-    const persist = async () => {
-      const key = `chat:${book.id}`;
-      await AsyncStorage.setItem(key, JSON.stringify(messages));
-    };
-    if (messages.length) persist();
-  }, [messages, book.id]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -149,6 +188,21 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     setIsTyping(true);
 
     try {
+      // Save user message to database if we have a conversation
+      if (conversationId) {
+        const userStr = await AsyncStorage.getItem('user');
+        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+        if (currentUser) {
+          await apiClient.saveMessage(
+            conversationId,
+            currentUser.id,
+            userMessage.text,
+            true,
+            undefined
+          );
+        }
+      }
+
       const answer = await askBookAssistant(
         {
           title: book.title,
@@ -167,6 +221,21 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         replyTo: undefined,
       };
       setMessages(prev => [...prev, botResponse]);
+
+      // Save bot response to database if we have a conversation
+      if (conversationId) {
+        const userStr = await AsyncStorage.getItem('user');
+        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+        if (currentUser) {
+          await apiClient.saveMessage(
+            conversationId,
+            currentUser.id,
+            botResponse.text,
+            false,
+            undefined
+          );
+        }
+      }
     } catch (e) {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
@@ -176,6 +245,21 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         replyTo: undefined,
       };
       setMessages(prev => [...prev, botResponse]);
+
+      // Save error message to database if we have a conversation
+      if (conversationId) {
+        const userStr = await AsyncStorage.getItem('user');
+        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+        if (currentUser) {
+          await apiClient.saveMessage(
+            conversationId,
+            currentUser.id,
+            botResponse.text,
+            false,
+            undefined
+          );
+        }
+      }
     } finally {
       setIsTyping(false);
     }

@@ -117,3 +117,35 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+
+-- Chat conversations table (for organizing chats)
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    book_id INTEGER,
+    conversation_type TEXT NOT NULL CHECK(conversation_type IN ('book', 'library')),
+    title TEXT,
+    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (book_id) REFERENCES books (id)
+);
+
+-- Chat messages table
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    message_text TEXT NOT NULL,
+    is_user_message BOOLEAN DEFAULT 1,
+    reply_to_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversation_id) REFERENCES chat_conversations (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (reply_to_id) REFERENCES chat_messages (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_id ON chat_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_book_id ON chat_conversations(book_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);

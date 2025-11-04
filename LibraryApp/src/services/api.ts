@@ -354,6 +354,65 @@ export const apiClient = {
     } catch (error) {
       throw new Error('Failed to update password');
     }
+  },
+
+  // ==================== CHAT HISTORY METHODS ====================
+  
+  async getConversations(userId: number) {
+    const response = await fetch(`${API_BASE}/chat/conversations?user_id=${userId}`);
+    if (!response.ok) throw new Error('Failed to fetch conversations');
+    return response.json();
+  },
+
+  async createConversation(userId: number, conversationType: 'book' | 'library', bookId?: number, title?: string) {
+    const response = await fetch(`${API_BASE}/chat/conversations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        book_id: bookId,
+        conversation_type: conversationType,
+        title: title
+      })
+    });
+    if (!response.ok) throw new Error('Failed to create conversation');
+    return response.json();
+  },
+
+  async getMessages(conversationId: number) {
+    const response = await fetch(`${API_BASE}/chat/messages/${conversationId}`);
+    if (!response.ok) throw new Error('Failed to fetch messages');
+    return response.json();
+  },
+
+  async saveMessage(
+    conversationId: number,
+    userId: number,
+    messageText: string,
+    isUserMessage: boolean = true,
+    replyToId?: number
+  ) {
+    const response = await fetch(`${API_BASE}/chat/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        user_id: userId,
+        message_text: messageText,
+        is_user_message: isUserMessage,
+        reply_to_id: replyToId
+      })
+    });
+    if (!response.ok) throw new Error('Failed to save message');
+    return response.json();
+  },
+
+  async deleteConversation(conversationId: number, userId: number) {
+    const response = await fetch(`${API_BASE}/chat/conversations/${conversationId}?user_id=${userId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete conversation');
+    return response.json();
   }
 };
 
@@ -421,5 +480,5 @@ export const notificationApi = {
     });
     if (!response.ok) throw new Error('Failed to mark all notifications as read');
     return response.json();
-  },
+  }
 };

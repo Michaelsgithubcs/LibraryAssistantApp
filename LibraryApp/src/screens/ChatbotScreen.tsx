@@ -7,6 +7,7 @@ import { Input } from '../components/Input';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
+import { apiClient } from '../services/api';
 
 interface ChatbotScreenProps {
   user: User;
@@ -25,21 +26,70 @@ import { TouchableOpacity, Animated } from 'react-native';
 import { PanGestureHandler, State as GestureState } from 'react-native-gesture-handler';
 
 export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
-      isUser: false,
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Create refs for message animations
   const messageAnimations = useRef<{[key: string]: Animated.Value}>({})
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        // Create or get conversation from database
+        const conversation = await apiClient.createConversation(
+          user.id,
+          'library',
+          undefined,
+          'Library Assistant Chat'
+        );
+        setConversationId(conversation.id);
+
+        // Load messages from database
+        const dbMessages = await apiClient.getMessages(conversation.id);
+        if (dbMessages.length > 0) {
+          const parsed: Message[] = dbMessages.map((m: any) => ({
+            id: m.id.toString(),
+            text: m.message_text,
+            isUser: m.is_user_message,
+            timestamp: new Date(m.created_at),
+          }));
+          setMessages(parsed);
+        } else {
+          // Set welcome message and save it
+          const welcomeMsg: Message = {
+            id: '1',
+            text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
+            isUser: false,
+            timestamp: new Date()
+          };
+          setMessages([welcomeMsg]);
+          
+          // Save welcome message to database
+          await apiClient.saveMessage(
+            conversation.id,
+            user.id,
+            welcomeMsg.text,
+            false,
+            undefined
+          );
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+        // Fallback to local welcome message
+        setMessages([{
+          id: '1',
+          text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
+          isUser: false,
+          timestamp: new Date()
+        }]);
+      }
+    };
+    loadHistory();
+  }, [user.id]);
 
   useEffect(() => {
     scrollToBottom();
@@ -100,7 +150,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     return responses[Math.floor(Math.random() * responses.length)];
   };
 
-  const sendMessage = (): void => {
+  const sendMessage = async (): Promise<void> => {
     if (!inputText.trim()) return;
 
     const userMessage: Message = {
@@ -112,15 +162,31 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const messageText = inputText.trim();
     setInputText('');
     setIsTyping(true);
     setReplyingTo(null);
 
+    // Save user message to database
+    if (conversationId) {
+      try {
+        await apiClient.saveMessage(
+          conversationId,
+          user.id,
+          userMessage.text,
+          true,
+          undefined
+        );
+      } catch (error) {
+        console.error('Error saving user message:', error);
+      }
+    }
+
     // Simulate typing delay
-    setTimeout(() => {
+    setTimeout(async () => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: generateResponse(inputText.trim()),
+        text: generateResponse(messageText),
         isUser: false,
         timestamp: new Date(),
         replyTo: userMessage
@@ -128,6 +194,21 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
 
       setMessages(prev => [...prev, botResponse]);
       setIsTyping(false);
+
+      // Save bot response to database
+      if (conversationId) {
+        try {
+          await apiClient.saveMessage(
+            conversationId,
+            user.id,
+            botResponse.text,
+            false,
+            undefined
+          );
+        } catch (error) {
+          console.error('Error saving bot message:', error);
+        }
+      }
     }, 1500);
   };
 

@@ -1860,6 +1860,196 @@ def init_notifications_table():
             'error': str(e)
         }), 500
 
+# ==================== CHAT HISTORY ENDPOINTS ====================
+
+@app.route('/api/chat/conversations', methods=['GET'])
+def get_conversations():
+    """Get all chat conversations for a user"""
+    user_id = request.args.get('user_id', type=int)
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT c.*, b.title as book_title, b.author as book_author,
+                   (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id) as message_count
+            FROM chat_conversations c
+            LEFT JOIN books b ON c.book_id = b.id
+            WHERE c.user_id = ?
+            ORDER BY c.last_message_at DESC
+        ''', (user_id,))
+        
+        conversations = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(conversations)
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/conversations', methods=['POST'])
+def create_conversation():
+    """Create or get existing conversation"""
+    data = request.json
+    user_id = data.get('user_id')
+    book_id = data.get('book_id')
+    conversation_type = data.get('conversation_type', 'library')
+    
+    if not user_id or conversation_type not in ['book', 'library']:
+        return jsonify({'error': 'Invalid parameters'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        # Check if conversation already exists
+        if conversation_type == 'book' and book_id:
+            cursor.execute('''
+                SELECT * FROM chat_conversations 
+                WHERE user_id = ? AND book_id = ? AND conversation_type = 'book'
+            ''', (user_id, book_id))
+        else:
+            cursor.execute('''
+                SELECT * FROM chat_conversations 
+                WHERE user_id = ? AND conversation_type = 'library' AND book_id IS NULL
+            ''', (user_id,))
+        
+        existing = cursor.fetchone()
+        
+        if existing:
+            conversation_id = existing['id']
+        else:
+            # Create new conversation
+            title = data.get('title', 'New Conversation')
+            cursor.execute('''
+                INSERT INTO chat_conversations (user_id, book_id, conversation_type, title)
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, book_id, conversation_type, title))
+            conn.commit()
+            conversation_id = cursor.lastrowid
+        
+        # Get the conversation
+        cursor.execute('SELECT * FROM chat_conversations WHERE id = ?', (conversation_id,))
+        conversation = dict(cursor.fetchone())
+        
+        conn.close()
+        return jsonify(conversation)
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/messages/<int:conversation_id>', methods=['GET'])
+def get_messages(conversation_id):
+    """Get all messages in a conversation"""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            SELECT m.*, u.username,
+                   reply.message_text as reply_to_text
+            FROM chat_messages m
+            JOIN users u ON m.user_id = u.id
+            LEFT JOIN chat_messages reply ON m.reply_to_id = reply.id
+            WHERE m.conversation_id = ?
+            ORDER BY m.created_at ASC
+        ''', (conversation_id,))
+        
+        messages = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(messages)
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/messages', methods=['POST'])
+def save_message():
+    """Save a chat message"""
+    data = request.json
+    conversation_id = data.get('conversation_id')
+    user_id = data.get('user_id')
+    message_text = data.get('message_text')
+    is_user_message = data.get('is_user_message', True)
+    reply_to_id = data.get('reply_to_id')
+    
+    if not conversation_id or not user_id or not message_text:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    try:
+        # Insert message
+        cursor.execute('''
+            INSERT INTO chat_messages (conversation_id, user_id, message_text, is_user_message, reply_to_id)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (conversation_id, user_id, message_text, is_user_message, reply_to_id))
+        
+        message_id = cursor.lastrowid
+        
+        # Update conversation last_message_at
+        cursor.execute('''
+            UPDATE chat_conversations 
+            SET last_message_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        ''', (conversation_id,))
+        
+        conn.commit()
+        
+        # Get the saved message
+        cursor.execute('''
+            SELECT m.*, u.username
+            FROM chat_messages m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.id = ?
+        ''', (message_id,))
+        
+        message = dict(cursor.fetchone())
+        conn.close()
+        return jsonify(message)
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/conversations/<int:conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    """Delete a conversation and all its messages"""
+    user_id = request.args.get('user_id', type=int)
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Verify ownership
+        cursor.execute('SELECT user_id FROM chat_conversations WHERE id = ?', (conversation_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Conversation not found'}), 404
+        
+        if row[0] != user_id:
+            conn.close()
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Delete conversation (messages will cascade delete)
+        cursor.execute('DELETE FROM chat_conversations WHERE id = ?', (conversation_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Conversation deleted'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Bind to Render's provided PORT when deployed; fall back to local dev defaults
     port = int(os.environ.get('PORT', '5001'))
