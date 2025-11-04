@@ -1,6 +1,6 @@
 # Library Management System Backend
 
-A Python Flask backend with SQLite database for the library management system, featuring advanced machine learning recommendations.
+A Python Flask backend with SQLite builddatabase for the library management system, featuring advanced machine learning recommendations.
 
 ## Features
 
