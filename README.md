@@ -42,6 +42,16 @@ A Python Flask backend with SQLite database for the library management system, f
 
 4. **Server will be available at**: `http://localhost:5000`
 
+### Persistence and Deployment
+- The backend reads the database path from the `DATABASE_PATH` environment variable. If unset, it defaults to `library.db` in the current directory.
+- For production (e.g., Render), attach a persistent disk and set `DATABASE_PATH` to a file on that disk, such as `/var/data/library.db`.
+- On startup, the server logs the database path in use: `[Startup] Using database at: <abs_path>`.
+
+### Diagnostics
+- A safe read-only diagnostics endpoint is available to verify persistence configuration:
+  - `GET /api/admin/db-info` → returns the absolute database path, whether it exists, file size in bytes, and simple table counts.
+  - Use this after deployment to confirm the DB points to your persistent disk.
+
 ## API Endpoints
 
 ### Books
