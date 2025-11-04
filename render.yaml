@@ -1,0 +1,20 @@
+# Render Blueprint: Backend with Persistent Disk
+# Docs: https://render.com/docs/infrastructure-as-code
+
+services:
+  - type: web
+    name: library-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/app.py
+    envVars:
+      - key: DATABASE_PATH
+        value: /var/data/library.db
+    disk:
+      name: library-data
+      mountPath: /var/data
+
+disks:
+  - name: library-data
+    sizeGB: 1

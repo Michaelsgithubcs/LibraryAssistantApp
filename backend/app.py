@@ -1861,4 +1861,9 @@ def init_notifications_table():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    # Bind to Render's provided PORT when deployed; fall back to local dev defaults
+    port = int(os.environ.get('PORT', '5001'))
+    host = '0.0.0.0' if os.environ.get('PORT') else '127.0.0.1'
+    debug = not bool(os.environ.get('PORT'))
+    print(f"[Startup] Running on {host}:{port} (debug={debug})")
+    app.run(host=host, port=port, debug=debug)

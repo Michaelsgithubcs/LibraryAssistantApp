@@ -194,6 +194,40 @@ npx react-native run-ios  # For iOS
 npx react-native run-android  # For Android
 ```
 
+## ☁️ Deployment (Render) with Persistent Database
+
+To ensure your notifications, reservations, and all data survive redeploys, deploy the backend with a persistent disk and point the app to it via `DATABASE_PATH`.
+
+### One-click Blueprint
+- Use the root `render.yaml` in this repository (at the project root, not the one under `backend/`). It:
+  - Creates a Python web service
+  - Installs backend requirements
+  - Starts the Flask app
+  - Attaches a persistent disk mounted at `/var/data`
+  - Sets `DATABASE_PATH=/var/data/library.db`
+
+On Render:
+- New > Blueprint > Connect this repo > pick `render.yaml` (root)
+- After deploy, open your service Logs and verify:
+  - `[Startup] Using database at: /var/data/library.db`
+  - `[Startup] Running on 0.0.0.0:<PORT>`
+
+### Verify persistence
+- Call the diagnostics endpoint on your deployed URL:
+  - `GET /api/admin/db-info`
+  - It returns the absolute database path, existence, size in bytes, and simple table counts. Example fields:
+    - `database_path`: should be `/var/data/library.db`
+    - `exists`: `true`
+    - `size_bytes`: non-zero after first writes
+    - `tables`: counts for `books`, `book_reservations`, `notifications`, `users`, etc.
+
+If `database_path` points to a path inside the app folder (e.g., `/opt/render/.../backend/library.db`) instead of `/var/data/library.db`, your service isn’t using the persistent disk. Redeploy using the root `render.yaml` (or set the `DATABASE_PATH` env var and attach a disk manually in the Render UI).
+
+Note: There are two `render.yaml` files in this repo. Prefer the one at the project root which includes the disk setup. The file under `backend/` is legacy and does not configure persistence.
+
+### Optional: Restore or seed data
+- If you have a backup (e.g., `backend/library_backup_*.db`) you want to use in production, replace `/var/data/library.db` with your backup file. You can do this via a one-off shell in the service or by a temporary deploy step.
+
 ## � Project Structure
 
 ```
