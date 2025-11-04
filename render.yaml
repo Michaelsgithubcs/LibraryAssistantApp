@@ -15,7 +15,4 @@ services:
     disk:
       name: library-data
       mountPath: /var/data
-
-disks:
-  - name: library-data
-    sizeGB: 1
+      sizeGB: 1
