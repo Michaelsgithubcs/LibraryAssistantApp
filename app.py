@@ -176,6 +176,21 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
+    # Account requests table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS account_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT NOT NULL,
+            password TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            approved_at TIMESTAMP,
+            approved_by INTEGER,
+            FOREIGN KEY (approved_by) REFERENCES users (id)
+        )
+    ''')
+    
     # Insert admin user
     admin_password = hashlib.sha256('admin'.encode()).hexdigest()
     user_password = hashlib.sha256('user'.encode()).hexdigest()
@@ -727,6 +742,113 @@ def delete_member(member_id):
     conn.close()
     
     return jsonify({'message': 'Member deleted successfully'})
+
+# Account Request Endpoints
+@app.route('/api/account-requests', methods=['POST'])
+def create_account_request():
+    data = request.json
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not username or not email or not password:
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Check if username or email already exists in users or pending requests
+    cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Username or email already exists'}), 400
+    
+    cursor.execute('SELECT id FROM account_requests WHERE username = ? OR email = ? AND status = "pending"', (username, email))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Account request with this username or email is already pending'}), 400
+    
+    # Hash the password
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    
+    # Insert account request
+    cursor.execute('''
+        INSERT INTO account_requests (username, email, password, status)
+        VALUES (?, ?, ?, 'pending')
+    ''', (username, email, hashed_password))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Account request submitted successfully'}), 201
+
+@app.route('/api/account-requests', methods=['GET'])
+def get_account_requests():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, username, email, status, requested_at
+        FROM account_requests
+        WHERE status = 'pending'
+        ORDER BY requested_at DESC
+    ''')
+    requests_data = cursor.fetchall()
+    
+    request_list = []
+    for req in requests_data:
+        request_list.append({
+            'id': req[0],
+            'username': req[1],
+            'email': req[2],
+            'status': req[3],
+            'requested_at': req[4]
+        })
+    
+    conn.close()
+    return jsonify(request_list)
+
+@app.route('/api/account-requests/<int:request_id>/approve', methods=['POST'])
+def approve_account_request(request_id):
+    data = request.json
+    approved_by = data.get('approved_by')  # Admin user ID
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    # Get the account request details
+    cursor.execute('SELECT username, email, password FROM account_requests WHERE id = ? AND status = "pending"', (request_id,))
+    request_data = cursor.fetchone()
+    
+    if not request_data:
+        conn.close()
+        return jsonify({'error': 'Account request not found or already processed'}), 404
+    
+    username, email, password = request_data
+    
+    # Check if username or email already exists in users table
+    cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'Username or email already exists'}), 400
+    
+    # Create the user account
+    cursor.execute('''
+        INSERT INTO users (username, email, password, role)
+        VALUES (?, ?, ?, 'user')
+    ''', (username, email, password))
+    
+    # Update the request status
+    cursor.execute('''
+        UPDATE account_requests 
+        SET status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = ?
+        WHERE id = ?
+    ''', (approved_by, request_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Account request approved successfully'}), 200
 
 @app.route('/api/admin/books/<int:book_id>/issue', methods=['POST'])
 def issue_book(book_id):
