@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, Image, ActivityIndicator, ImageBackground } from 'react-native';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Svg, { Path } from 'react-native-svg';
@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { VoiceRecorder } from '../components/VoiceRecorder';
+import { ChatThemeSettings } from '../components/ChatThemeSettings';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { IssuedBook, User } from '../types';
@@ -31,6 +32,11 @@ interface Message {
   replyTo?: Message;
 }
 
+interface ThemeSettings {
+  type: 'color' | 'wallpaper' | 'custom';
+  value: string;
+}
+
 export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigation }) => {
   const { book, user } = route.params;
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,6 +47,11 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
   const [isRecording, setIsRecording] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
+  const [chatTheme, setChatTheme] = useState<ThemeSettings>({
+    type: 'color',
+    value: '#F5F5F5',
+  });
   const scrollViewRef = useRef<ScrollView>(null);
   const translateXRefs = useRef<Animated.Value[]>([]);
   const syncIntervalRef = useRef<any>(null);
@@ -48,9 +59,36 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
   useEffect(() => {
     navigation.setOptions({
       title: `Chat: ${book.title}`,
-      headerTitleStyle: { fontSize: 16 }
+      headerTitleStyle: { fontSize: 16 },
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setShowThemeSettings(true)}
+          style={{ marginRight: 40, padding: 4 }}
+        >
+          <Image
+            source={require('../../assets/theme.png')}
+            style={{ width: 24, height: 24, tintColor: '#FFFFFF' }}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      ),
     });
-  }, []);
+  }, [navigation, book.title, showThemeSettings]);
+
+  // Load saved theme
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem(`chat_theme_book_${book.id}`);
+        if (savedTheme) {
+          setChatTheme(JSON.parse(savedTheme));
+        }
+      } catch (error) {
+        console.error('Error loading theme:', error);
+      }
+    };
+    loadTheme();
+  }, [book.id]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -453,16 +491,46 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleThemeChange = (theme: ThemeSettings) => {
+    setChatTheme(theme);
+  };
+
+  const getBackgroundStyle = () => {
+    if (chatTheme.type === 'color') {
+      return { backgroundColor: chatTheme.value };
+    }
+    return { backgroundColor: '#F5F5F5' };
+  };
+
+  const getBackgroundSource = () => {
+    if (chatTheme.type === 'wallpaper') {
+      const wallpaperNum = parseInt(chatTheme.value);
+      if (wallpaperNum === 1) return require('../../assets/wallpaper1.jpg');
+      if (wallpaperNum === 2) return require('../../assets/wallpaper2.jpg');
+      if (wallpaperNum === 3) return require('../../assets/wallpaper3.jpg');
+    } else if (chatTheme.type === 'custom') {
+      return { uri: chatTheme.value };
+    }
+    return null;
+  };
+
+  const backgroundSource = getBackgroundSource();
+  const BackgroundWrapper: any = backgroundSource ? ImageBackground : View;
+  const backgroundProps: any = backgroundSource
+    ? { source: backgroundSource, style: { flex: 1 }, resizeMode: 'cover' as const }
+    : { style: [{ flex: 1 }, getBackgroundStyle()] };
+
   return (
     <KeyboardAvoidingView 
       style={commonStyles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        showsVerticalScrollIndicator={false}
-      >
+      <BackgroundWrapper {...backgroundProps}>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Use a ref array to store Animated.Value for each message */}
         {messages.map((message, idx) => {
           if (!translateXRefs.current[idx]) {
@@ -567,6 +635,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           </View>
         )}
       </ScrollView>
+      </BackgroundWrapper>
 
       <View style={styles.inputContainer}>
         <Card style={styles.inputCard}>
@@ -625,6 +694,15 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           </View>
         </Card>
       </View>
+
+      <ChatThemeSettings
+        visible={showThemeSettings}
+        onClose={() => setShowThemeSettings(false)}
+        onThemeChange={handleThemeChange}
+        currentTheme={chatTheme}
+        chatType="book"
+        bookId={book.id}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -689,7 +767,7 @@ const styles = StyleSheet.create({
   
   inputContainer: {
     paddingBottom: Platform.OS === 'ios' ? 32 : 20,
-    marginBottom: 8,
+    backgroundColor: colors.background,
   },
   
   inputCard: {

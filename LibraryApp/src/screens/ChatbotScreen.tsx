@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   
   inputContainer: {
     paddingBottom: Platform.OS === 'ios' ? 32 : 20,
-    marginBottom: 8,
+    backgroundColor: colors.background,
   },
   
   inputCard: {
