@@ -70,7 +70,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <Text style={styles.title}>📚 Library App</Text>
           <Text style={styles.subtitle}>Welcome back!</Text>
           <Text style={commonStyles.textSecondary}>Sign in to access your library account</Text>
         </View>
@@ -85,7 +84,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
             autoCapitalize="none"
             autoCorrect={false}
           />
-          
           <Input
             label="Password"
             value={password}
@@ -93,7 +91,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
             placeholder="Enter your password"
             secureTextEntry
           />
-          
           <Button
             title={loading ? "Signing in..." : "Sign In"}
             onPress={handleLogin}
@@ -102,7 +99,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
           />
         </Card>
 
-        <View style={styles.footer}>
+        <View style={{ ...styles.footer, marginTop: 16 }}>
           <Text style={commonStyles.textMuted}>
             Demo accounts: user@library.com / user
           </Text>
@@ -127,7 +124,7 @@ const styles = StyleSheet.create({
   
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 8,
     paddingHorizontal: 16,
   },
   

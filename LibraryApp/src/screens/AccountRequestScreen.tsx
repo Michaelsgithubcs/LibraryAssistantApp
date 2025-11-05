@@ -70,11 +70,7 @@ export const AccountRequestScreen: React.FC<AccountRequestScreenProps> = ({ navi
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <Text style={styles.title}>📝 Request Account</Text>
-          <Text style={styles.subtitle}>Create Your Account</Text>
-          <Text style={[commonStyles.textSecondary, { textAlign: 'center', marginTop: 8 }]}>
-            Fill in your details below. A librarian will review and approve your account request.
-          </Text>
+          <Text style={styles.title}>Request Account</Text>
         </View>
 
         <Card style={styles.formCard}>
@@ -146,7 +142,7 @@ const styles = StyleSheet.create({
   
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 12,
     paddingHorizontal: 16,
   },
   
