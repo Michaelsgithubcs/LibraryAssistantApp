@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Animated, Easing, Image, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, Animated, Easing, Image } from 'react-native';
 import Voice from 'react-native-voice';
 import Svg, { Path } from 'react-native-svg';
 import { colors } from '../styles/colors';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NUM_BARS = 40; // Number of waveform bars
 
 interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
@@ -22,11 +19,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedText, setRecordedText] = useState<string>('');
+  const recordedTextRef = useRef<string>(''); // Use ref to access latest value in callbacks
   
-  // Animation values for waveform bars - many bars for full-width effect
-  const waveAnimations = useRef(
-    Array.from({ length: NUM_BARS }, () => new Animated.Value(0.2 + Math.random() * 0.3))
-  ).current;
+  // Animation values for 3 waveform bars (original design)
+  const waveAnimations = useRef([
+    new Animated.Value(0.3),
+    new Animated.Value(0.5),
+    new Animated.Value(0.4),
+  ]).current;
 
   // Pulsing animation for mic button
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -101,9 +101,33 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     console.log('Speech started', e);
   };
 
-  const onSpeechEnd = (e: any) => {
-    console.log('Speech ended', e);
-    // Don't auto-stop - let user click send or stop
+  const onSpeechEnd = async (e: any) => {
+    console.log('Speech ended - auto-sending recording');
+    
+    // Wait a bit for final results
+    await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+    
+    // Stop recording and send
+    try {
+      await Voice.stop();
+      setIsRecording(false);
+      onRecordingStateChange?.(false);
+      
+      const finalText = recordedTextRef.current.trim();
+      console.log('Sending transcription on speech end:', finalText);
+      
+      if (finalText) {
+        onTranscriptionComplete(finalText);
+      }
+      
+      // Reset
+      setRecordedText('');
+      recordedTextRef.current = '';
+    } catch (error) {
+      console.error('Error in onSpeechEnd:', error);
+      setIsRecording(false);
+      onRecordingStateChange?.(false);
+    }
   };
 
   const onSpeechResults = (e: any) => {
@@ -112,6 +136,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       const transcribedText = e.value[0];
       console.log('Transcribed text:', transcribedText);
       setRecordedText(transcribedText);
+      recordedTextRef.current = transcribedText; // Update ref immediately
     }
   };
 
@@ -121,14 +146,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   };
 
   const onSpeechVolumeChanged = (e: any) => {
-    // Update waveform based on voice level
+    // Update waveform based on voice level - make bars move with volume
     if (e.value && isRecording) {
       const level = Math.min(e.value / 10, 1);
-      // Animate random bars based on volume
-      const randomBars = Array.from({ length: 5 }, () => Math.floor(Math.random() * NUM_BARS));
-      randomBars.forEach(barIndex => {
-        Animated.timing(waveAnimations[barIndex], {
-          toValue: 0.3 + level * 0.7,
+      // Animate all bars based on volume
+      waveAnimations.forEach((anim, index) => {
+        Animated.timing(anim, {
+          toValue: level > 0.1 ? 0.5 + level * 0.5 : 0.3,
           duration: 100,
           useNativeDriver: true,
         }).start();
@@ -156,48 +180,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }
   };
 
-  const stopRecording = async () => {
-    try {
-      await Voice.stop();
-      await Voice.cancel();
-      setIsRecording(false);
-      setRecordedText('');
-      onRecordingStateChange?.(false);
-    } catch (error) {
-      console.error('Error stopping recording:', error);
-      setIsRecording(false);
-      onRecordingStateChange?.(false);
-    }
-  };
 
-  const sendRecording = async () => {
-    try {
-      console.log('Stopping recording and sending...');
-      await Voice.stop();
-      
-      // Wait a moment for final speech results to be processed
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
-      
-      console.log('Recorded text to send:', recordedText);
-      
-      setIsRecording(false);
-      onRecordingStateChange?.(false);
-      
-      // Send the recorded text
-      if (recordedText.trim()) {
-        console.log('Sending transcription:', recordedText);
-        onTranscriptionComplete(recordedText);
-      } else {
-        console.log('No text recorded, sending empty');
-        onTranscriptionComplete('');
-      }
-      setRecordedText('');
-    } catch (error) {
-      console.error('Error sending recording:', error);
-      setIsRecording(false);
-      onRecordingStateChange?.(false);
-    }
-  };
 
   const handleMicPress = () => {
     if (disabled) return;
@@ -207,29 +190,19 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   return (
     <View style={styles.container}>
       {isRecording ? (
-        // Show full-width waveform with stop button on left when recording
-        <View style={styles.recordingContainer}>
-          <TouchableOpacity
-            onPress={sendRecording}
-            activeOpacity={0.7}
-            style={styles.stopButton}
-          >
-            <View style={styles.stopSquare} />
-          </TouchableOpacity>
-          
-          <View style={styles.waveformContainer}>
-            {waveAnimations.map((anim, index) => (
-              <Animated.View
-                key={index}
-                style={[
-                  styles.waveBar,
-                  {
-                    transform: [{ scaleY: anim }],
-                  },
-                ]}
-              />
-            ))}
-          </View>
+        // Show waveform when recording (no buttons)
+        <View style={styles.waveformContainer}>
+          {waveAnimations.map((anim, index) => (
+            <Animated.View
+              key={index}
+              style={[
+                styles.waveBar,
+                {
+                  transform: [{ scaleY: anim }],
+                },
+              ]}
+            />
+          ))}
         </View>
       ) : (
         // Show mic button when not recording
@@ -256,33 +229,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  
-  recordingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    gap: 12,
-  },
-  
-  stopButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  stopSquare: {
-    width: 12,
-    height: 12,
-    backgroundColor: '#fff',
-    borderRadius: 2,
+    gap: 6,
   },
   
   iconButton: {
@@ -300,17 +247,14 @@ const styles = StyleSheet.create({
   waveformContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    flex: 1,
-    height: 32,
-    gap: 1,
+    justifyContent: 'center',
+    gap: 3,
   },
   
   waveBar: {
-    flex: 1,
+    width: 3,
+    height: 20,
     backgroundColor: colors.primary,
-    borderRadius: 2,
-    minHeight: 4,
-    maxHeight: 32,
+    borderRadius: 1.5,
   },
 });

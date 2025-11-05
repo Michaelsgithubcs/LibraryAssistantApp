@@ -176,29 +176,29 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   };
 
   const handleVoiceTranscriptionStart = () => {
-    // Create a "Transcribing..." message
-    const transcribingMessage: Message = {
-      id: `transcribing-${Date.now()}`,
-      text: 'Transcribing...',
-      isUser: true,
-      timestamp: new Date(),
-      replyTo: replyingTo || undefined,
-    };
-    
-    setTranscribingMessageId(transcribingMessage.id);
-    setMessages(prev => [...prev, transcribingMessage]);
-    setIsTranscribing(true);
+    // Don't show "Transcribing..." immediately - just clear reply state
     setReplyingTo(null);
   };
 
   const handleVoiceTranscriptionComplete = async (transcribedText: string) => {
     if (!transcribedText.trim()) {
-      // Remove the "Transcribing..." message if no text
-      setMessages(prev => prev.filter(m => m.id !== transcribingMessageId));
-      setIsTranscribing(false);
-      setTranscribingMessageId(null);
       return;
     }
+
+    // Show "Transcribing..." message briefly AFTER speech ends
+    const transcribingMessage: Message = {
+      id: `transcribing-${Date.now()}`,
+      text: 'Transcribing...',
+      isUser: true,
+      timestamp: new Date(),
+    };
+    
+    setTranscribingMessageId(transcribingMessage.id);
+    setMessages(prev => [...prev, transcribingMessage]);
+    setIsTranscribing(true);
+
+    // Wait a moment to show transcribing status
+    await new Promise<void>(resolve => setTimeout(() => resolve(), 300));
 
     // Replace "Transcribing..." with the actual transcribed text
     setMessages(prev =>
