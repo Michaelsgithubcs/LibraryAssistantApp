@@ -125,6 +125,10 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ user, navigation }) => {
               <Text style={styles.memberSince}>
                 Member since {user.created_at ? new Date(user.created_at).toLocaleDateString() : '2024'}
               </Text>
+              <View style={styles.debugInfo}>
+                <Text style={styles.debugText}>User ID: {user.id}</Text>
+                <Text style={styles.debugText}>Role: {user.role}</Text>
+              </View>
               {(() => {
                 console.log('User object:', user);
                 return null;
@@ -329,6 +333,19 @@ const styles = StyleSheet.create({
   memberSince: {
     fontSize: 14,
     color: colors.text.muted,
+  },
+  
+  debugInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: colors.background,
+    borderRadius: 4,
+  },
+  
+  debugText: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    fontFamily: 'monospace',
   },
   
   profileActions: {

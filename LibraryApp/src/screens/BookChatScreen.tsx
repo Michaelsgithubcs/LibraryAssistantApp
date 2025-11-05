@@ -188,24 +188,25 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     }
 
     // Show "Transcribing..." message briefly AFTER speech ends
+    const messageId = `transcribing-${Date.now()}`;
     const transcribingMessage: Message = {
-      id: `transcribing-${Date.now()}`,
+      id: messageId,
       text: 'Transcribing...',
       isUser: true,
       timestamp: new Date(),
     };
     
-    setTranscribingMessageId(transcribingMessage.id);
+    setTranscribingMessageId(messageId);
     setMessages(prev => [...prev, transcribingMessage]);
     setIsTranscribing(true);
 
     // Wait a moment to show transcribing status
     await new Promise<void>(resolve => setTimeout(() => resolve(), 300));
 
-    // Replace "Transcribing..." with the actual transcribed text and clear transcribing state
+    // Replace "Transcribing..." with the actual transcribed text
     setMessages(prev =>
       prev.map(m =>
-        m.id === transcribingMessageId
+        m.id === messageId
           ? { ...m, text: transcribedText }
           : m
       )
@@ -213,7 +214,6 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     
     // Clear transcribing state immediately after replacing text
     setIsTranscribing(false);
-    const messageId = transcribingMessageId;
     setTranscribingMessageId(null);
 
     // Now send the transcribed text to the AI (message will show actual text, not "Transcribing...")
