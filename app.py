@@ -1147,7 +1147,7 @@ def get_user_reservations_all(user_id):
         FROM book_reservations br
         JOIN books b ON br.book_id = b.id
         WHERE br.user_id = ?
-        ORDER BY COALESCE(br.approved_at, br.requested_at) DESC
+        ORDER BY br.requested_at DESC
     ''', (user_id,))
     rows = cursor.fetchall()
 
