@@ -25,108 +25,168 @@ A modern, AI-powered library management solution that transforms traditional lib
 - **Content-Based Filtering**: Receive personalized book recommendations based on the content and themes of books you've previously enjoyed
 - **Collaborative Filtering**: Discover books based on preferences of users with similar reading tastes and patterns
 
-### � Library Management
-- **Book Search & Discovery**: Advanced search functionality with filters for genre, author, publication date, and availability
-- **Reservation System**: Reserve books that are currently checked out and receive notifications when they become available
-- **E-Book Integration**: Seamlessly browse, borrow, and read e-books directly within the application
-- **Borrowing History**: View your complete borrowing history and currently checked out items
-- **Fine Management**: Track and pay overdue fines directly through the application
 
-### 🔔 Smart Notifications
-- **Due Date Reminders**: Receive timely notifications about upcoming book due dates
-- **Reservation Alerts**: Get notified when reserved books become available for checkout
-- **New Arrivals**: Custom alerts about new books that match your reading preferences
-- **Event Notifications**: Stay informed about library events, reading clubs, and author visits
+# Librant: AI-Powered Library Management System
 
-## 🧠 Machine Learning Recommendations System
-
-The LibraryApp features a sophisticated recommendation engine powered by multiple machine learning approaches implemented in `recommendation_service.py`:
-
-### Content-Based Filtering
-- Analyzes book metadata including titles, authors, genres, and descriptions
-- Utilizes TF-IDF (Term Frequency-Inverse Document Frequency) vectorization from scikit-learn to identify thematic similarities
-- Creates feature vectors from combined book metadata (title, author, category, description)
-- Calculates cosine similarity between book vectors to find content similarities
-- Recommends books with similar content features to those you've previously enjoyed
-- Particularly effective for users with specific genre preferences or niche interests
-
-### Collaborative Filtering
-- User-based approach identifies readers with similar borrowing and rating patterns
-- Calculates similarity between users based on their rating patterns
-- Finds books that similar users rated highly (≥4) but the target user hasn't read
-- Weighs recommendations by both similarity scores and rating values
-- Handles sparse data gracefully when users have few common books
-- Only recommends books with high ratings from similar users to ensure quality
-
-### Hybrid Recommendation Approach
-- Combines both content-based and collaborative filtering techniques for more robust recommendations
-- Employs a weighted algorithm (60% collaborative, 40% content-based) to balance between approaches
-- Returns detailed book information along with recommendation scores
-- Prioritizes books that score highly across both recommendation methods
-- Includes fallback mechanisms when either approach has insufficient data
-- Returns book details including availability, enabling practical recommendation implementation
-
-## � Security & Privacy
-
-- **User Authentication**: Secure login using email/password with optional biometric authentication
-- **Data Encryption**: All sensitive user data and borrowing history is encrypted
-- **Privacy Controls**: Users can opt in/out of recommendation features and data collection
-- **GDPR Compliant**: Conforms to international data protection standards
-
-## 📱 App Structure
-
-### User Flows
-- **Authentication**: Login, signup, password recovery
-- **Discovery**: Browse collections, search for books, explore recommendations
-- **Management**: Reserve, borrow, return, and renew books
-- **E-Reading**: Access and read e-books within the app
-- **Settings**: Configure notification preferences, privacy settings, and account details
-
-### Screens
-- **Dashboard**: Overview of current borrows, due dates, and personalized recommendations
-- **Book Search**: Find books by title, author, genre, or availability
-- **My Books**: Track borrowed books and reading progress
-- **E-Book Store**: Browse and access digital book collection
-- **Notifications**: View all system notifications and alerts
-- **Library Assistant**: Chat interface for library-related queries
-- **More**: Access to settings, profile, fines management, and additional features
-
-## � Mobile App Screenshots
-
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/3e22da45-d368-4ae8-8fd9-7c3ffc48af73" alt="Dashboard" width="250"/>
-  <img src="https://github.com/user-attachments/assets/6076e3a1-0b41-4801-8fc5-60e16cd9b5fd" alt="Book Details" width="250"/>
-  <img src="https://github.com/user-attachments/assets/ed60ef0f-d0ba-4350-b044-c49bfa9b2767" alt="E-Book Store" width="250"/>
-</p>
-
-## �️ Technology Stack
-
-### Frontend (Mobile App)
-- **React Native**: Cross-platform mobile application framework
-- **Redux**: State management across the application
-- **AsyncStorage**: Local data persistence
-- **React Navigation**: Navigation management between screens
-
-### Backend
-- **Python**: Backend service implementation
-- **Flask**: REST API framework for communication between app and server
-- **SQLite**: Local database for book and user information
-- **scikit-learn**: Machine learning library for recommendation algorithms
-- **Google Generative AI**: Integration for chatbot functionality
-
-### API Endpoints
-
-#### Books & Reading
-- `GET /api/books` - Retrieve books with optional filters for title, author, category
-- `POST /api/books/<id>/rate` - Submit a rating and optional review for a book
-- `POST /api/books/<id>/purchase` - Record an e-book purchase
-- `POST /api/books/<id>/reserve` - Reserve a physical book for borrowing
-- `POST /api/reading-progress` - Update a user's reading progress on a book
-
-#### AI & Recommendations
-- `GET /api/recommendations/<user_id>` - Get personalized book recommendations using ML algorithms
   - Query params: `type` (ml, content, collaborative) and `limit` (number of results)
+
+---
+
+## 🏗️ Project Structure
+
+```
+LibraryAssistantApp/
+├── backend/         # Python Flask backend, ML, DB
+├── src/            # Admin web dashboard (Vite/React)
+├── LibraryApp/     # React Native mobile app (Android/iOS)
+├── public/         # Static assets for web
+└── ...             # Docs, configs, deployment
+```
+
+---
+
+## � Mobile App (React Native)
+- User login, account request, and profile management
+- Dashboard: borrowed books, due dates, reading stats, ML-powered recommendations
+- Book search, e-book reading, borrowing/reservation, and fine management
+- AI-powered chat assistant for library and book queries
+- Push notifications for due dates, reservations, and events
+- Built with: React Native, Redux, AsyncStorage, React Navigation
+
+## 🖥️ Admin Web Dashboard (Vite/React)
+- Manage books, members, reservations, and fines
+- Approve/reject account requests and book reservations
+- Real-time dashboard: overdue books, new members, requests, and stats
+- ML recommendations and chatbot management
+- Built with: React, shadcn/ui, Tailwind, lucide-react, Vite
+
+## 🧠 Backend (Python/Flask)
+- REST API for all app/web features
+- SQLite database (easy to swap for Postgres)
+- ML recommendation engine: content-based, collaborative, hybrid
+- Google Generative AI integration for chatbots
+- Smart notifications, fine/payment logic, and admin endpoints
+- Deployable to Render with persistent disk
+
+## 🤖 Machine Learning & AI
+- Content-based filtering: TF-IDF + cosine similarity on book metadata
+- Collaborative filtering: user borrowing/rating patterns
+- Hybrid: weighted blend for robust recommendations
+- Popularity fallback for new users
+- Google Gemini/GPT for chat assistant
+
+## 🔔 Notifications
+- Push notifications (mobile): due dates, reservations, events
+- In-app notification center (mobile)
+- Admin web: real-time request indicators
+
+## 🔒 Security & Privacy
+- Secure login, password hashing, and session management
+- Data encryption and privacy controls
+- GDPR compliant
+
+---
+
+## 🚀 Quickstart
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/Michaelsgithubcs/LibraryAssistantApp.git
+cd LibraryAssistantApp
+# Mobile app deps
+cd LibraryApp && npm install
+# Backend deps
+cd ../backend && pip install -r requirements.txt
+```
+
+### 2. Run Backend (Flask)
+```bash
+cd backend
+python app.py
+# or
+python start.py
+```
+Backend runs at http://localhost:5000 (or on Render cloud)
+
+### 3. Run Mobile App (React Native)
+```bash
+cd ../LibraryApp
+npx react-native start
+# In another terminal:
+npx react-native run-android   # or run-ios
+```
+
+### 4. Run Admin Web (Vite/React)
+```bash
+cd ../
 - `POST /api/ai/assistant` - General library assistance chatbot using Google Generative AI
+npm run dev
+# Visit http://localhost:8080
+```
+
+---
+
+## 🗄️ Database Schema (SQLite)
+- Users, books, book_issues, reading_progress, purchases, book_reservations, fines, notifications, ML features
+- See `backend/schema.sql` for full schema
+
+---
+
+## 🔬 ML Recommendation System
+- `/backend/ml_recommendation_service.py` and `/backend/recommendation_service.py`
+- Content-based: TF-IDF on title/author/category/description
+- Collaborative: user-book matrix, cosine similarity
+- Hybrid: weighted blend, fallback to popularity
+- Exposed via `/api/recommendations/<user_id>?type=ml|content|collaborative|hybrid`
+
+---
+
+## 🌐 API Overview
+- Auth: `/api/auth/login`, `/api/auth/signup`, `/api/account-requests`
+- Books: `/api/books`, `/api/categories`, `/api/books/<id>/rate`, `/api/books/<id>/purchase`, `/api/books/<id>/reserve`
+- Recommendations: `/api/recommendations/<user_id>`
+- Notifications: `/api/notifications`, push/in-app
+- Admin: `/api/admin/members`, `/api/admin/books`, `/api/admin/overdue-count`, `/api/admin/reservation-requests`, `/api/account-requests`
+- See backend/app.py for all endpoints
+
+---
+
+## ☁️ Deployment (Render)
+- Use root `render.yaml` for one-click deploy with persistent disk
+- Set `DATABASE_PATH=/var/data/library.db` for data persistence
+- Diagnostics: `/api/admin/db-info` endpoint
+
+---
+
+## 🛠️ Tech Stack
+- Mobile: React Native, Redux, AsyncStorage, React Navigation
+- Web: React, Vite, shadcn/ui, Tailwind, lucide-react
+- Backend: Python, Flask, SQLite, scikit-learn, pandas, numpy, Google Generative AI
+- Notifications: react-native-push-notification, PushNotificationIOS
+
+---
+
+## 📂 Key Files & Directories
+- `backend/app.py` — Flask API
+- `backend/ml_recommendation_service.py` — ML engine
+- `backend/schema.sql` — DB schema
+- `src/` — Admin web dashboard
+- `LibraryApp/` — Mobile app (Android/iOS)
+- `LibraryApp/src/screens/` — Mobile screens (Dashboard, BookChat, Login, AccountRequest, etc.)
+- `LibraryApp/src/services/api.ts` — Mobile API client
+- `LibraryApp/src/store/` — Redux store
+
+---
+
+## 👥 Contributors
+- Michael Ndlovu — Lead Developer
+
+## 📧 Contact
+For questions or support, email [mikendlovumx@gmail.com]
+
+---
+
+Made with ❤️ for modern libraries and book lovers everywhere.
 - `POST /api/ai/book-assistant` - Book-specific assistance for discussions and study help
 
 #### User & Authentication
