@@ -43,6 +43,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
   const [conversationId, setConversationId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const translateXRefs = useRef<Animated.Value[]>([]);
+  const syncIntervalRef = useRef<any>(null);
 
   useEffect(() => {
     navigation.setOptions({
@@ -63,44 +64,68 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           }
         }
 
-        // Always use local storage for chat history (API endpoints may not be available)
-        const key = `chat:${book.id}`;
-        const raw = await AsyncStorage.getItem(key);
-        if (raw) {
-          const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp),
-          }));
-          setMessages(parsed);
-        } else {
+        if (!currentUser) {
           setWelcomeMessage();
+          return;
         }
 
-        // Try to create conversation in database (optional - will fail silently if API not available)
-        if (currentUser) {
-          try {
-            const conversation = await apiClient.createConversation(
+        // Try to load from database first (primary source of truth)
+        try {
+          // Get or create conversation
+          const conversations = await apiClient.getConversations(currentUser.id);
+          let conversation = conversations.find((c: any) => 
+            c.conversation_type === 'book' && c.book_id === parseInt(book.id)
+          );
+          
+          if (!conversation) {
+            // Create new conversation and save welcome message
+            conversation = await apiClient.createConversation(
               currentUser.id,
               'book',
               parseInt(book.id),
               `${book.title} Discussion`
             );
-            setConversationId(conversation.id);
             
-            // Try to load messages from database
-            const dbMessages = await apiClient.getMessages(conversation.id);
-            if (dbMessages.length > 0) {
-              const parsed: Message[] = dbMessages.map((m: any) => ({
-                id: m.id.toString(),
-                text: m.message_text,
-                isUser: m.is_user_message,
-                timestamp: new Date(m.created_at),
-              }));
-              setMessages(parsed);
-            }
-          } catch (apiError) {
-            // API not available - continue with local storage
-            console.log('Using local storage for chat history');
+            const welcomeText = `📖 Welcome to your book discussion for "${book.title}" by ${book.author}!\n\nI can help you with:\n• Character analysis and development\n• Plot discussions and themes\n• Chapter summaries\n• Reading comprehension\n• Discussion questions\n• And more...\n\nWhat would you like to explore about this book?`;
+            
+            await apiClient.saveMessage(
+              conversation.id,
+              currentUser.id,
+              welcomeText,
+              false,
+              undefined
+            );
+          }
+          
+          setConversationId(conversation.id);
+
+          // Load messages from database
+          const dbMessages = await apiClient.getMessages(conversation.id);
+          if (dbMessages.length > 0) {
+            const parsed: Message[] = dbMessages.map((m: any) => ({
+              id: m.id.toString(),
+              text: m.message_text,
+              isUser: m.is_user_message,
+              timestamp: new Date(m.created_at),
+            }));
+            setMessages(parsed);
+            console.log(`Loaded ${parsed.length} messages from database for book ${book.title}`);
+          } else {
+            setWelcomeMessage();
+          }
+        } catch (apiError) {
+          // API not available - fallback to local storage
+          console.log('Database unavailable, using local storage');
+          const key = `chat:${book.id}`;
+          const raw = await AsyncStorage.getItem(key);
+          if (raw) {
+            const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            }));
+            setMessages(parsed);
+          } else {
+            setWelcomeMessage();
           }
         }
       } catch (error) {
@@ -110,6 +135,43 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     };
     loadHistory();
   }, [book.id]);
+
+  // Sync messages every 5 seconds to keep all devices in sync
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const syncMessages = async () => {
+      try {
+        const dbMessages = await apiClient.getMessages(conversationId);
+        const parsed: Message[] = dbMessages.map((m: any) => ({
+          id: m.id.toString(),
+          text: m.message_text,
+          isUser: m.is_user_message,
+          timestamp: new Date(m.created_at),
+        }));
+        
+        // Only update if messages changed
+        setMessages(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+            console.log('Book chat messages synced from database');
+            return parsed;
+          }
+          return prev;
+        });
+      } catch (error) {
+        console.log('Sync failed, will retry');
+      }
+    };
+
+    // Start syncing every 5 seconds
+    syncIntervalRef.current = setInterval(syncMessages, 5000);
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
+  }, [conversationId]);
 
   const setWelcomeMessage = () => {
     setMessages([
@@ -216,7 +278,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     setIsTranscribing(false);
     setTranscribingMessageId(null);
 
-    // Now send the transcribed text to the AI (message will show actual text, not "Transcribing...")
+    // Send the transcribed text to the AI (will be saved to database)
     await sendVoiceMessage(transcribedText);
   };
 
@@ -224,25 +286,8 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     setIsTyping(true);
 
     try {
-      // Try to save user message to database if we have a conversation (optional)
-      if (conversationId) {
-        try {
-          const userStr = await AsyncStorage.getItem('user');
-          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-          if (currentUser) {
-            await apiClient.saveMessage(
-              conversationId,
-              currentUser.id,
-              messageText,
-              true,
-              undefined
-            );
-          }
-        } catch (apiError) {
-          // API not available - continue anyway
-          console.log('Could not save message to database, using local storage');
-        }
-      }
+      // Save user message to database
+      await saveMessageToDatabase(messageText, true);
 
       const answer = await askBookAssistant(
         {
@@ -261,32 +306,16 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
+
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
-        // Save to local storage
         saveToLocalStorage(updated);
         return updated;
       });
 
-      // Try to save bot response to database if we have a conversation (optional)
-      if (conversationId) {
-        try {
-          const userStr = await AsyncStorage.getItem('user');
-          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-          if (currentUser) {
-            await apiClient.saveMessage(
-              conversationId,
-              currentUser.id,
-              botResponse.text,
-              false,
-              undefined
-            );
-          }
-        } catch (apiError) {
-          // API not available - continue anyway
-          console.log('Could not save response to database, using local storage');
-        }
-      }
+      // Save bot response to database
+      await saveMessageToDatabase(answer, false);
     } catch (e) {
       console.error('Error sending voice message:', e);
       const botResponse: Message = {
@@ -296,12 +325,16 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
+
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
-        // Save to local storage
         saveToLocalStorage(updated);
         return updated;
       });
+
+      // Save error message to database
+      await saveMessageToDatabase(botResponse.text, false);
     } finally {
       setIsTyping(false);
     }
@@ -318,36 +351,21 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
       replyTo: replyingTo || undefined,
     };
 
+    // Update UI immediately
     setMessages(prev => {
       const updated = [...prev, userMessage];
-      // Save to local storage immediately
       saveToLocalStorage(updated);
       return updated;
     });
+
+    const messageText = inputText.trim();
     setInputText('');
     setReplyingTo(null);
     setIsTyping(true);
 
     try {
-      // Try to save user message to database if we have a conversation (optional)
-      if (conversationId) {
-        try {
-          const userStr = await AsyncStorage.getItem('user');
-          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-          if (currentUser) {
-            await apiClient.saveMessage(
-              conversationId,
-              currentUser.id,
-              userMessage.text,
-              true,
-              undefined
-            );
-          }
-        } catch (apiError) {
-          // API not available - continue anyway
-          console.log('Could not save message to database, using local storage');
-        }
-      }
+      // Save user message to database
+      await saveMessageToDatabase(messageText, true);
 
       const answer = await askBookAssistant(
         {
@@ -356,7 +374,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           description: '',
           category: '',
         },
-        inputText.trim()
+        messageText
       );
 
       const botResponse: Message = {
@@ -366,32 +384,16 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
+
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
-        // Save to local storage
         saveToLocalStorage(updated);
         return updated;
       });
 
-      // Try to save bot response to database if we have a conversation (optional)
-      if (conversationId) {
-        try {
-          const userStr = await AsyncStorage.getItem('user');
-          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-          if (currentUser) {
-            await apiClient.saveMessage(
-              conversationId,
-              currentUser.id,
-              botResponse.text,
-              false,
-              undefined
-            );
-          }
-        } catch (apiError) {
-          // API not available - continue anyway
-          console.log('Could not save response to database, using local storage');
-        }
-      }
+      // Save bot response to database
+      await saveMessageToDatabase(answer, false);
     } catch (e) {
       console.error('Error in sendMessage:', e);
       const botResponse: Message = {
@@ -401,12 +403,16 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
+
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
-        // Save to local storage
         saveToLocalStorage(updated);
         return updated;
       });
+
+      // Save error message to database
+      await saveMessageToDatabase(botResponse.text, false);
     } finally {
       setIsTyping(false);
     }
@@ -418,6 +424,28 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
       await AsyncStorage.setItem(key, JSON.stringify(messagesToSave));
     } catch (error) {
       console.error('Error saving to local storage:', error);
+    }
+  };
+
+  const saveMessageToDatabase = async (messageText: string, isUserMessage: boolean) => {
+    if (!conversationId) return;
+    
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+      
+      if (!currentUser) return;
+      
+      await apiClient.saveMessage(
+        conversationId,
+        currentUser.id,
+        messageText,
+        isUserMessage,
+        undefined
+      );
+      console.log(`Book chat message saved to database (user: ${isUserMessage})`);
+    } catch (error) {
+      console.error('Failed to save message to database:', error);
     }
   };
 

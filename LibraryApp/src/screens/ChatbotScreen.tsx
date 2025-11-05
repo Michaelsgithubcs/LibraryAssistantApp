@@ -39,14 +39,12 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   
   // Create refs for message animations
   const messageAnimations = useRef<{[key: string]: Animated.Value}>({})
+  const syncIntervalRef = useRef<any>(null);
 
+  // Initialize and sync messages from database
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        // Load from local storage first
-        const key = `chat:library:${user.id}`;
-        const raw = await AsyncStorage.getItem(key);
-        
         const welcomeMsg: Message = {
           id: '1',
           text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
@@ -54,29 +52,32 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
           timestamp: new Date()
         };
         
-        if (raw) {
-          const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp),
-          }));
-          setMessages(parsed);
-        } else {
-          setMessages([welcomeMsg]);
-          // Save to local storage
-          await AsyncStorage.setItem(key, JSON.stringify([welcomeMsg]));
-        }
-
-        // Try to create conversation in database (optional - fails silently if API unavailable)
+        // Try to load from database first (primary source of truth)
         try {
-          const conversation = await apiClient.createConversation(
-            user.id,
-            'library',
-            undefined,
-            'Library Assistant Chat'
-          );
+          // Get or create conversation
+          const conversations = await apiClient.getConversations(user.id);
+          let conversation = conversations.find((c: any) => c.conversation_type === 'library');
+          
+          if (!conversation) {
+            // Create new conversation and save welcome message
+            conversation = await apiClient.createConversation(
+              user.id,
+              'library',
+              undefined,
+              'Library Assistant Chat'
+            );
+            await apiClient.saveMessage(
+              conversation.id,
+              user.id,
+              welcomeMsg.text,
+              false,
+              undefined
+            );
+          }
+          
           setConversationId(conversation.id);
 
-          // Try to load messages from database
+          // Load messages from database
           const dbMessages = await apiClient.getMessages(conversation.id);
           if (dbMessages.length > 0) {
             const parsed: Message[] = dbMessages.map((m: any) => ({
@@ -86,16 +87,30 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
               timestamp: new Date(m.created_at),
             }));
             setMessages(parsed);
-            // Update local storage
-            await AsyncStorage.setItem(key, JSON.stringify(parsed));
+            console.log(`Loaded ${parsed.length} messages from database`);
+          } else {
+            // No messages yet, show welcome
+            setMessages([welcomeMsg]);
           }
         } catch (apiError) {
-          // API not available - continue with local storage
-          console.log('Using local storage for library chat history');
+          // API not available - fallback to local storage
+          console.log('Database unavailable, using local storage');
+          const key = `chat:library:${user.id}`;
+          const raw = await AsyncStorage.getItem(key);
+          
+          if (raw) {
+            const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            }));
+            setMessages(parsed);
+          } else {
+            setMessages([welcomeMsg]);
+          }
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
-        // Fallback to local welcome message
+        // Final fallback
         setMessages([{
           id: '1',
           text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
@@ -106,6 +121,43 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     };
     loadHistory();
   }, [user.id]);
+
+  // Sync messages every 5 seconds to keep all devices in sync
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const syncMessages = async () => {
+      try {
+        const dbMessages = await apiClient.getMessages(conversationId);
+        const parsed: Message[] = dbMessages.map((m: any) => ({
+          id: m.id.toString(),
+          text: m.message_text,
+          isUser: m.is_user_message,
+          timestamp: new Date(m.created_at),
+        }));
+        
+        // Only update if messages changed
+        setMessages(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+            console.log('Messages synced from database');
+            return parsed;
+          }
+          return prev;
+        });
+      } catch (error) {
+        console.log('Sync failed, will retry');
+      }
+    };
+
+    // Start syncing every 5 seconds
+    syncIntervalRef.current = setInterval(syncMessages, 5000);
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -175,6 +227,25 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     }
   };
 
+  const saveMessageToDatabase = async (messageText: string, isUserMessage: boolean) => {
+    if (!conversationId) return;
+    
+    try {
+      await apiClient.saveMessage(
+        conversationId,
+        user.id,
+        messageText,
+        isUserMessage,
+        undefined
+      );
+      console.log(`Message saved to database (user: ${isUserMessage})`);
+    } catch (error) {
+      console.error('Failed to save message to database:', error);
+      // Fallback to local storage only
+      saveToLocalStorage(messages);
+    }
+  };
+
   const handleVoiceTranscriptionStart = () => {
     // Don't show "Transcribing..." immediately - just clear reply state
     setReplyingTo(null);
@@ -214,35 +285,15 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     setIsTranscribing(false);
     setTranscribingMessageId(null);
 
-    // Save to local storage
-    const updatedMessages = messages.map(m =>
-      m.id === messageId
-        ? { ...m, text: transcribedText }
-        : m
-    );
-    saveToLocalStorage(updatedMessages);
-
-    // Now send the transcribed text to the AI (message will show actual text, not "Transcribing...")
+    // Send the transcribed text to the AI (will be saved to database)
     await sendVoiceMessage(transcribedText);
   };
 
   const sendVoiceMessage = async (messageText: string) => {
     setIsTyping(true);
 
-    // Save user message to database (optional)
-    if (conversationId) {
-      try {
-        await apiClient.saveMessage(
-          conversationId,
-          user.id,
-          messageText,
-          true,
-          undefined
-        );
-      } catch (error) {
-        console.log('Could not save to database, using local storage');
-      }
-    }
+    // Save user message to database
+    await saveMessageToDatabase(messageText, true);
 
     // Simulate typing delay
     setTimeout(async () => {
@@ -253,27 +304,17 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
         timestamp: new Date(),
       };
 
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
         saveToLocalStorage(updated);
         return updated;
       });
-      setIsTyping(false);
 
-      // Save bot response to database (optional)
-      if (conversationId) {
-        try {
-          await apiClient.saveMessage(
-            conversationId,
-            user.id,
-            botResponse.text,
-            false,
-            undefined
-          );
-        } catch (error) {
-          console.log('Could not save to database, using local storage');
-        }
-      }
+      // Save bot response to database
+      await saveMessageToDatabase(botResponse.text, false);
+      
+      setIsTyping(false);
     }, 1500);
   };
 
@@ -288,30 +329,20 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
       replyTo: replyingTo || undefined
     };
 
+    // Update UI immediately
     setMessages(prev => {
       const updated = [...prev, userMessage];
       saveToLocalStorage(updated);
       return updated;
     });
+
     const messageText = inputText.trim();
     setInputText('');
     setIsTyping(true);
     setReplyingTo(null);
 
-    // Save user message to database (optional)
-    if (conversationId) {
-      try {
-        await apiClient.saveMessage(
-          conversationId,
-          user.id,
-          userMessage.text,
-          true,
-          undefined
-        );
-      } catch (error) {
-        console.log('Could not save to database, using local storage');
-      }
-    }
+    // Save user message to database
+    await saveMessageToDatabase(messageText, true);
 
     // Simulate typing delay
     setTimeout(async () => {
@@ -323,27 +354,17 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
         replyTo: userMessage
       };
 
+      // Update UI immediately
       setMessages(prev => {
         const updated = [...prev, botResponse];
         saveToLocalStorage(updated);
         return updated;
       });
-      setIsTyping(false);
 
-      // Save bot response to database (optional)
-      if (conversationId) {
-        try {
-          await apiClient.saveMessage(
-            conversationId,
-            user.id,
-            botResponse.text,
-            false,
-            undefined
-          );
-        } catch (error) {
-          console.log('Could not save to database, using local storage');
-        }
-      }
+      // Save bot response to database
+      await saveMessageToDatabase(botResponse.text, false);
+      
+      setIsTyping(false);
     }, 1500);
   };
 
