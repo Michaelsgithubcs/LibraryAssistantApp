@@ -214,7 +214,7 @@ export const EnhancedMemberManagement = () => {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
             </span>
           )}
-        </div>
+      </div>
         <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Member
@@ -269,22 +269,91 @@ export const EnhancedMemberManagement = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Members list */}
+      <div className="space-y-4">
+        {allDisplayItems.map((item) => (
+          <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex-1">
+              <div className="flex items-start gap-3">
+                <User className="h-5 w-5 mt-1 text-primary" />
+                <div>
+                  <h4 className="font-semibold">{item.username}</h4>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span>{item.email}</span>
+                  </div>
+                  <div className="flex items-center gap-4 mt-2">
+                    {item.isPending ? (
+                      <>
+                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">Pending Request</Badge>
+                        <span className="text-xs text-muted-foreground">Requested: {item.requested_at ? new Date(item.requested_at).toLocaleDateString() : 'N/A'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Badge variant="outline">{item.role}</Badge>
+                        <Badge variant={item.status === "active" ? "default" : "destructive"}>{item.status}</Badge>
+                        <span className="text-xs text-muted-foreground">Joined: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</span>
+                        {item.role !== 'admin' && (
+                          <span className="text-xs text-muted-foreground">Books: {item.books_issued || 0}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {item.isPending ? (
+                <Button className="bg-green-500 hover:bg-green-600 text-white" size="sm" onClick={() => approveAccountRequest(item.id)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setSelectedMember(item);
+                    setEditMember({ username: item.username, email: item.email, password: "", role: item.role });
+                    setShowEditDialog(true);
+                  }}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setSelectedMember(item);
+                    if (item.status === "suspended") {
+                      unsuspendMember(item.id);
+                    } else {
+                      setShowSuspendDialog(true);
+                    }
+                  }}>
+                    <UserX className="h-4 w-4" />
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => deleteMember(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Edit Member Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
           </DialogHeader>
-          {/* ...existing code for edit dialog... */}
-        </DialogContent>
-      </Dialog>
-    </div>
-                onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
-              />
+          <div className="space-y-4">
+            <div>
+              <Label>Username</Label>
+              <Input value={editMember.username} onChange={(e) => setEditMember({ ...editMember, username: e.target.value })} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input type="email" value={editMember.email} onChange={(e) => setEditMember({ ...editMember, email: e.target.value })} />
             </div>
             <div>
               <Label>Role</Label>
-              <Select value={newMember.role} onValueChange={(value) => setNewMember({ ...newMember, role: value })}>
+              <Select value={editMember.role} onValueChange={(value) => setEditMember({ ...editMember, role: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -295,108 +364,40 @@ export const EnhancedMemberManagement = () => {
               </Select>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button onClick={addMember}>Add Member</Button>
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+              <Button onClick={handleEditMember}>Save</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      {/* Suspend Member Dialog */}
+      <Dialog open={showSuspendDialog} onOpenChange={setShowSuspendDialog}>
         <DialogContent>
           <DialogHeader>
-            <div className="space-y-4">
-              {allDisplayItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-3">
-                      <User className="h-5 w-5 mt-1 text-primary" />
-                      <div>
-                        <h4 className="font-semibold">{item.username}</h4>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Mail className="h-4 w-4" />
-                          <span>{item.email}</span>
-                        </div>
-                        <div className="flex items-center gap-4 mt-2">
-                          {item.isPending ? (
-                            <>
-                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">Pending Request</Badge>
-                              <span className="text-xs text-muted-foreground">
-                                Requested: {item.requested_at ? new Date(item.requested_at).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <Badge variant="outline">{item.role}</Badge>
-                              <Badge variant={item.status === "active" ? "default" : "destructive"}>
-                                {item.status}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                Joined: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}
-                              </span>
-                              {item.role !== 'admin' && (
-                                <span className="text-xs text-muted-foreground">
-                                  Books: {item.books_issued || 0}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    {item.isPending ? (
-                      <Button
-                        className="bg-green-500 hover:bg-green-600 text-white"
-                        size="sm"
-                        onClick={() => approveAccountRequest(item.id)}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedMember(item);
-                            setEditMember({
-                              username: item.username,
-                              email: item.email,
-                              password: "",
-                              role: item.role
-                            });
-                            setShowEditDialog(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedMember(item);
-                            if (item.status === "suspended") {
-                              unsuspendMember(item.id);
-                            } else {
-                              setShowSuspendDialog(true);
-                            }
-                          }}
-                        >
-                          <UserX className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteMember(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <DialogTitle>Suspend Member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Duration</Label>
+              <Select value={suspendDuration} onValueChange={(value) => setSuspendDuration(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1_month">1 Month</SelectItem>
+                  <SelectItem value="6_months">6 Months</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowSuspendDialog(false)}>Cancel</Button>
+              <Button onClick={suspendMember}>Suspend</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+    </div>
+  );
+}
