@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, Image } from 'react-native';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { VoiceRecorder } from '../components/VoiceRecorder';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { IssuedBook, User } from '../types';
@@ -35,6 +36,9 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribingMessageId, setTranscribingMessageId] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -59,43 +63,45 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           }
         }
 
-        if (!currentUser) {
-          // No user logged in - use local storage fallback
-          const key = `chat:${book.id}`;
-          const raw = await AsyncStorage.getItem(key);
-          if (raw) {
-            const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            }));
-            setMessages(parsed);
-          } else {
-            setWelcomeMessage();
-          }
-          return;
-        }
-
-        // Create or get conversation from database
-        const conversation = await apiClient.createConversation(
-          currentUser.id,
-          'book',
-          parseInt(book.id),
-          `${book.title} Discussion`
-        );
-        setConversationId(conversation.id);
-
-        // Load messages from database
-        const dbMessages = await apiClient.getMessages(conversation.id);
-        if (dbMessages.length > 0) {
-          const parsed: Message[] = dbMessages.map((m: any) => ({
-            id: m.id.toString(),
-            text: m.message_text,
-            isUser: m.is_user_message,
-            timestamp: new Date(m.created_at),
+        // Always use local storage for chat history (API endpoints may not be available)
+        const key = `chat:${book.id}`;
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
           }));
           setMessages(parsed);
         } else {
           setWelcomeMessage();
+        }
+
+        // Try to create conversation in database (optional - will fail silently if API not available)
+        if (currentUser) {
+          try {
+            const conversation = await apiClient.createConversation(
+              currentUser.id,
+              'book',
+              parseInt(book.id),
+              `${book.title} Discussion`
+            );
+            setConversationId(conversation.id);
+            
+            // Try to load messages from database
+            const dbMessages = await apiClient.getMessages(conversation.id);
+            if (dbMessages.length > 0) {
+              const parsed: Message[] = dbMessages.map((m: any) => ({
+                id: m.id.toString(),
+                text: m.message_text,
+                isUser: m.is_user_message,
+                timestamp: new Date(m.created_at),
+              }));
+              setMessages(parsed);
+            }
+          } catch (apiError) {
+            // API not available - continue with local storage
+            console.log('Using local storage for chat history');
+          }
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
@@ -171,6 +177,133 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     return bookResponses[Math.floor(Math.random() * bookResponses.length)];
   };
 
+  const handleVoiceTranscriptionStart = () => {
+    // Create a "Transcribing..." message
+    const transcribingMessage: Message = {
+      id: `transcribing-${Date.now()}`,
+      text: 'Transcribing...',
+      isUser: true,
+      timestamp: new Date(),
+      replyTo: replyingTo || undefined,
+    };
+    
+    setTranscribingMessageId(transcribingMessage.id);
+    setMessages(prev => [...prev, transcribingMessage]);
+    setIsTranscribing(true);
+    setReplyingTo(null);
+  };
+
+  const handleVoiceTranscriptionComplete = async (transcribedText: string) => {
+    if (!transcribedText.trim()) {
+      // Remove the "Transcribing..." message if no text
+      setMessages(prev => prev.filter(m => m.id !== transcribingMessageId));
+      setIsTranscribing(false);
+      setTranscribingMessageId(null);
+      return;
+    }
+
+    // Replace "Transcribing..." with the actual transcribed text
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === transcribingMessageId
+          ? { ...m, text: transcribedText }
+          : m
+      )
+    );
+    setIsTranscribing(false);
+    setTranscribingMessageId(null);
+
+    // Now send the transcribed text to the AI
+    await sendVoiceMessage(transcribedText);
+  };
+
+  const sendVoiceMessage = async (messageText: string) => {
+    setIsTyping(true);
+
+    try {
+      // Try to save user message to database if we have a conversation (optional)
+      if (conversationId) {
+        try {
+          const userStr = await AsyncStorage.getItem('user');
+          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+          if (currentUser) {
+            await apiClient.saveMessage(
+              conversationId,
+              currentUser.id,
+              messageText,
+              true,
+              undefined
+            );
+          }
+        } catch (apiError) {
+          // API not available - continue anyway
+          console.log('Could not save message to database, using local storage');
+        }
+      }
+
+      const answer = await askBookAssistant(
+        {
+          title: book.title,
+          author: book.author,
+          description: '',
+          category: '',
+        },
+        messageText
+      );
+
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: answer,
+        isUser: false,
+        timestamp: new Date(),
+        replyTo: undefined,
+      };
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        // Save to local storage
+        saveToLocalStorage(updated);
+        return updated;
+      });
+
+      // Try to save bot response to database if we have a conversation (optional)
+      if (conversationId) {
+        try {
+          const userStr = await AsyncStorage.getItem('user');
+          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+          if (currentUser) {
+            await apiClient.saveMessage(
+              conversationId,
+              currentUser.id,
+              botResponse.text,
+              false,
+              undefined
+            );
+          }
+        } catch (apiError) {
+          // API not available - continue anyway
+          console.log('Could not save response to database, using local storage');
+        }
+      }
+    } catch (e) {
+      console.error('Error sending voice message:', e);
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: 'Sorry, I could not fetch an answer right now. Please try again.',
+        isUser: false,
+        timestamp: new Date(),
+        replyTo: undefined,
+      };
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        // Save to local storage
+        saveToLocalStorage(updated);
+        return updated;
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -182,24 +315,34 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
       replyTo: replyingTo || undefined,
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => {
+      const updated = [...prev, userMessage];
+      // Save to local storage immediately
+      saveToLocalStorage(updated);
+      return updated;
+    });
     setInputText('');
     setReplyingTo(null);
     setIsTyping(true);
 
     try {
-      // Save user message to database if we have a conversation
+      // Try to save user message to database if we have a conversation (optional)
       if (conversationId) {
-        const userStr = await AsyncStorage.getItem('user');
-        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-        if (currentUser) {
-          await apiClient.saveMessage(
-            conversationId,
-            currentUser.id,
-            userMessage.text,
-            true,
-            undefined
-          );
+        try {
+          const userStr = await AsyncStorage.getItem('user');
+          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+          if (currentUser) {
+            await apiClient.saveMessage(
+              conversationId,
+              currentUser.id,
+              userMessage.text,
+              true,
+              undefined
+            );
+          }
+        } catch (apiError) {
+          // API not available - continue anyway
+          console.log('Could not save message to database, using local storage');
         }
       }
 
@@ -220,23 +363,34 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
-      setMessages(prev => [...prev, botResponse]);
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        // Save to local storage
+        saveToLocalStorage(updated);
+        return updated;
+      });
 
-      // Save bot response to database if we have a conversation
+      // Try to save bot response to database if we have a conversation (optional)
       if (conversationId) {
-        const userStr = await AsyncStorage.getItem('user');
-        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-        if (currentUser) {
-          await apiClient.saveMessage(
-            conversationId,
-            currentUser.id,
-            botResponse.text,
-            false,
-            undefined
-          );
+        try {
+          const userStr = await AsyncStorage.getItem('user');
+          const currentUser = user || (userStr ? JSON.parse(userStr) : null);
+          if (currentUser) {
+            await apiClient.saveMessage(
+              conversationId,
+              currentUser.id,
+              botResponse.text,
+              false,
+              undefined
+            );
+          }
+        } catch (apiError) {
+          // API not available - continue anyway
+          console.log('Could not save response to database, using local storage');
         }
       }
     } catch (e) {
+      console.error('Error in sendMessage:', e);
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: 'Sorry, I could not fetch an answer right now. Please try again.',
@@ -244,24 +398,23 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
         timestamp: new Date(),
         replyTo: undefined,
       };
-      setMessages(prev => [...prev, botResponse]);
-
-      // Save error message to database if we have a conversation
-      if (conversationId) {
-        const userStr = await AsyncStorage.getItem('user');
-        const currentUser = user || (userStr ? JSON.parse(userStr) : null);
-        if (currentUser) {
-          await apiClient.saveMessage(
-            conversationId,
-            currentUser.id,
-            botResponse.text,
-            false,
-            undefined
-          );
-        }
-      }
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        // Save to local storage
+        saveToLocalStorage(updated);
+        return updated;
+      });
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const saveToLocalStorage = async (messagesToSave: Message[]) => {
+    try {
+      const key = `chat:${book.id}`;
+      await AsyncStorage.setItem(key, JSON.stringify(messagesToSave));
+    } catch (error) {
+      console.error('Error saving to local storage:', error);
     }
   };
 
@@ -395,20 +548,42 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
             </View>
           )}
           <View style={styles.inputRow}>
-            <Input
-              placeholder={replyingTo ? "Reply to this message..." : "Ask about characters, themes, plot..."}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              style={styles.textInput}
-              containerStyle={{ flex: 1, margin: 0 }}
-            />
-            <Button
-              title="Ask"
-              onPress={sendMessage}
-              disabled={!inputText.trim() || isTyping}
-              style={styles.sendButton}
-            />
+            <View style={styles.inputWrapper}>
+              <Input
+                placeholder={replyingTo ? "Reply to this message..." : "Ask Librant"}
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                editable={!isRecording}
+                style={[styles.textInput, styles.textInputBorder]}
+                containerStyle={{ flex: 1, margin: 0 }}
+              />
+              <View style={styles.inputButtonsWrapper}>
+                <VoiceRecorder
+                  onTranscriptionStart={handleVoiceTranscriptionStart}
+                  onTranscriptionComplete={handleVoiceTranscriptionComplete}
+                  onRecordingStateChange={setIsRecording}
+                  disabled={isTyping || isTranscribing}
+                />
+                {!isRecording && (
+                  <TouchableOpacity
+                    onPress={sendMessage}
+                    disabled={!inputText.trim() || isTyping || isTranscribing}
+                    activeOpacity={0.7}
+                    style={styles.sendIconButton}
+                  >
+                    <Image
+                      source={require('../../assets/icons/send.png')}
+                      style={[
+                        styles.sendIcon,
+                        (!inputText.trim() || isTyping || isTranscribing) && styles.sendIconDisabled
+                      ]}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </View>
         </Card>
       </View>
@@ -475,7 +650,8 @@ const styles = StyleSheet.create({
   },
   
   inputContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+    marginBottom: 8,
   },
   
   inputCard: {
@@ -487,11 +663,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
+    paddingBottom: 4,
+  },
+  
+  inputWrapper: {
+    flex: 1,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   
   textInput: {
     maxHeight: 100,
-    minHeight: 40,
+    minHeight: 48,
+    paddingRight: 80, // Make space for mic + send buttons (28px each + gap)
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 12,
+  },
+  
+  textInputBorder: {
+    borderColor: '#000000', // Black border
+    borderWidth: 1,
+  },
+  
+  inputButtonsWrapper: {
+    position: 'absolute',
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  
+  sendIconButton: {
+    padding: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  sendIcon: {
+    width: 28,
+    height: 28,
+    tintColor: colors.primary,
+  },
+  
+  sendIconDisabled: {
+    opacity: 0.3,
   },
   
   sendButton: {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent, TouchableOpacity, Image } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -8,6 +8,7 @@ import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
 import { apiClient } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ChatbotScreenProps {
   user: User;
@@ -22,7 +23,7 @@ interface Message {
   replyTo?: Message;
 }
 
-import { TouchableOpacity, Animated } from 'react-native';
+import { Animated } from 'react-native';
 import { PanGestureHandler, State as GestureState } from 'react-native-gesture-handler';
 
 export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }) => {
@@ -39,43 +40,55 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        // Create or get conversation from database
-        const conversation = await apiClient.createConversation(
-          user.id,
-          'library',
-          undefined,
-          'Library Assistant Chat'
-        );
-        setConversationId(conversation.id);
-
-        // Load messages from database
-        const dbMessages = await apiClient.getMessages(conversation.id);
-        if (dbMessages.length > 0) {
-          const parsed: Message[] = dbMessages.map((m: any) => ({
-            id: m.id.toString(),
-            text: m.message_text,
-            isUser: m.is_user_message,
-            timestamp: new Date(m.created_at),
+        // Load from local storage first
+        const key = `chat:library:${user.id}`;
+        const raw = await AsyncStorage.getItem(key);
+        
+        const welcomeMsg: Message = {
+          id: '1',
+          text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
+          isUser: false,
+          timestamp: new Date()
+        };
+        
+        if (raw) {
+          const parsed: Message[] = JSON.parse(raw).map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
           }));
           setMessages(parsed);
         } else {
-          // Set welcome message and save it
-          const welcomeMsg: Message = {
-            id: '1',
-            text: `Hello ${user.username}! 👋 I'm your Library Assistant. I can help you with:\n\n• Finding books and authors\n• Library policies and hours\n• Account information\n• Reading recommendations\n• General library questions\n\nWhat would you like to know?`,
-            isUser: false,
-            timestamp: new Date()
-          };
           setMessages([welcomeMsg]);
-          
-          // Save welcome message to database
-          await apiClient.saveMessage(
-            conversation.id,
+          // Save to local storage
+          await AsyncStorage.setItem(key, JSON.stringify([welcomeMsg]));
+        }
+
+        // Try to create conversation in database (optional - fails silently if API unavailable)
+        try {
+          const conversation = await apiClient.createConversation(
             user.id,
-            welcomeMsg.text,
-            false,
-            undefined
+            'library',
+            undefined,
+            'Library Assistant Chat'
           );
+          setConversationId(conversation.id);
+
+          // Try to load messages from database
+          const dbMessages = await apiClient.getMessages(conversation.id);
+          if (dbMessages.length > 0) {
+            const parsed: Message[] = dbMessages.map((m: any) => ({
+              id: m.id.toString(),
+              text: m.message_text,
+              isUser: m.is_user_message,
+              timestamp: new Date(m.created_at),
+            }));
+            setMessages(parsed);
+            // Update local storage
+            await AsyncStorage.setItem(key, JSON.stringify(parsed));
+          }
+        } catch (apiError) {
+          // API not available - continue with local storage
+          console.log('Using local storage for library chat history');
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
@@ -150,6 +163,15 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     return responses[Math.floor(Math.random() * responses.length)];
   };
 
+  const saveToLocalStorage = async (messagesToSave: Message[]) => {
+    try {
+      const key = `chat:library:${user.id}`;
+      await AsyncStorage.setItem(key, JSON.stringify(messagesToSave));
+    } catch (error) {
+      console.error('Error saving to local storage:', error);
+    }
+  };
+
   const sendMessage = async (): Promise<void> => {
     if (!inputText.trim()) return;
 
@@ -161,13 +183,17 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
       replyTo: replyingTo || undefined
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => {
+      const updated = [...prev, userMessage];
+      saveToLocalStorage(updated);
+      return updated;
+    });
     const messageText = inputText.trim();
     setInputText('');
     setIsTyping(true);
     setReplyingTo(null);
 
-    // Save user message to database
+    // Save user message to database (optional)
     if (conversationId) {
       try {
         await apiClient.saveMessage(
@@ -178,7 +204,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
           undefined
         );
       } catch (error) {
-        console.error('Error saving user message:', error);
+        console.log('Could not save to database, using local storage');
       }
     }
 
@@ -192,10 +218,14 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
         replyTo: userMessage
       };
 
-      setMessages(prev => [...prev, botResponse]);
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        saveToLocalStorage(updated);
+        return updated;
+      });
       setIsTyping(false);
 
-      // Save bot response to database
+      // Save bot response to database (optional)
       if (conversationId) {
         try {
           await apiClient.saveMessage(
@@ -206,7 +236,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
             undefined
           );
         } catch (error) {
-          console.error('Error saving bot message:', error);
+          console.log('Could not save to database, using local storage');
         }
       }
     }, 1500);
@@ -362,25 +392,33 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
             </View>
           )}
           <View style={styles.inputRow}>
-            <Input
-              placeholder={replyingTo ? "Reply to this message..." : "Ask me anything about the library..."}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              style={[styles.textInput, { height: 40, minHeight: 40, maxHeight: 40, paddingVertical: 0 }]}
-              containerStyle={{ flex: 1, margin: 0 }}
-            />
-            <Button
-              title="Send"
-              onPress={sendMessage}
-              disabled={!inputText.trim() || isTyping}
-              style={{ 
-                ...styles.sendButton, 
-                height: 40, 
-                minHeight: 40, 
-                paddingVertical: 0 
-              }}
-            />
+            <View style={styles.inputWrapper}>
+              <Input
+                placeholder={replyingTo ? "Reply to this message..." : "Enquire"}
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                style={[styles.textInput, styles.textInputBorder]}
+                containerStyle={{ flex: 1, margin: 0 }}
+              />
+              <View style={styles.inputButtonsWrapper}>
+                <TouchableOpacity
+                  onPress={sendMessage}
+                  disabled={!inputText.trim() || isTyping}
+                  activeOpacity={0.7}
+                  style={styles.sendIconButton}
+                >
+                  <Image
+                    source={require('../../assets/icons/send.png')}
+                    style={[
+                      styles.sendIcon,
+                      (!inputText.trim() || isTyping) && styles.sendIconDisabled
+                    ]}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </Card>
       </View>
@@ -448,7 +486,8 @@ const styles = StyleSheet.create({
   },
   
   inputContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+    marginBottom: 8,
   },
   
   inputCard: {
@@ -460,17 +499,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
+    paddingBottom: 4,
   },
   
-  textInput: {
+  inputWrapper: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 0,
-    height: 40,
-    minHeight: 40,
-    maxHeight: 40,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
   } as ViewStyle,
+  
+  textInput: {
+    maxHeight: 100,
+    minHeight: 48,
+    paddingRight: 50,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 12,
+  } as TextStyle,
+  
+  textInputBorder: {
+    borderColor: '#000000',
+    borderWidth: 1,
+  } as TextStyle,
+  
+  inputButtonsWrapper: {
+    position: 'absolute',
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  } as ViewStyle,
+  
+  sendIconButton: {
+    padding: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as ViewStyle,
+  
+  sendIcon: {
+    width: 28,
+    height: 28,
+    tintColor: colors.primary,
+  } as any,
+  
+  sendIconDisabled: {
+    opacity: 0.3,
+  } as any,
   
   sendButton: {
     height: 40,

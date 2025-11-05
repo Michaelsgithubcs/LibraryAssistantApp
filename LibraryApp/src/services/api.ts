@@ -426,19 +426,45 @@ export interface AiBookContext {
 
 export async function askBookAssistant(book: AiBookContext, question: string): Promise<string> {
   try {
+    // Create a timeout controller
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     const response = await fetch(`${API_BASE}/ai/book-assistant`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ book, question }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error || 'AI request failed');
     }
     const data = await response.json();
     return data.answer || 'No answer returned.';
-  } catch (e) {
-    throw e;
+  } catch (e: any) {
+    // If API fails, provide a helpful fallback response
+    console.error('AI API error:', e);
+    
+    // Provide contextual fallback based on the question
+    const lowerQuestion = question.toLowerCase();
+    
+    if (lowerQuestion.includes('character')) {
+      return `I'd love to discuss the characters in "${book.title}" by ${book.author}! While I'm currently unable to connect to the AI assistant, I can help you explore:\n\n• Character motivations and development\n• Relationships between characters\n• Character analysis techniques\n\nPlease try your question again in a moment, or feel free to share your thoughts about the characters!`;
+    }
+    
+    if (lowerQuestion.includes('theme') || lowerQuestion.includes('plot')) {
+      return `Great question about "${book.title}"! I'm currently experiencing connectivity issues with the AI assistant, but I'd still love to help you explore the themes and plot of this book.\n\nPlease try again in a moment, and we can discuss the deeper meanings and story structure together!`;
+    }
+    
+    if (lowerQuestion.includes('chapter') || lowerQuestion.includes('summary')) {
+      return `I'd be happy to help you with chapter analysis for "${book.title}"! Unfortunately, I'm currently unable to connect to the full AI assistant.\n\nPlease try your question again shortly, and I'll provide detailed chapter breakdowns and key points!`;
+    }
+    
+    // Generic fallback
+    return `I'm sorry, but I'm currently experiencing connectivity issues with the AI assistant for "${book.title}". This could be due to:\n\n• Network connectivity\n• Server maintenance\n• High traffic\n\nPlease try your question again in a few moments. I'll be ready to help you explore characters, themes, plot, and more about this book!`;
   }
 }
 
