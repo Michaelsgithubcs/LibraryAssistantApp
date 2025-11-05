@@ -108,7 +108,8 @@ android {
     
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
-            def appName = "Library-Assistant"
+            // APK filename shown when building releases. Set to the public app name "Librant".
+            def appName = "Librant"
             def versionName = variant.versionName
             def buildType = variant.buildType.name
             outputFileName = "${appName}-${versionName}-${buildType}.apk"
