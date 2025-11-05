@@ -208,12 +208,7 @@ export const EnhancedMemberManagement = () => {
       <div className="flex justify-between items-center">
         <div className="relative flex items-center">
           <h2 className="text-3xl font-bold">Member Management</h2>
-          {accountRequests.length > 0 && (
-            <span className="absolute -top-1 -right-4 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-          )}
+          {/* Green dot indicator moved to the sidebar (Index.tsx) */}
       </div>
         <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -272,7 +267,7 @@ export const EnhancedMemberManagement = () => {
       {/* Members list */}
       <div className="space-y-4">
         {allDisplayItems.map((item) => (
-          <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+          <div key={`${item.isPending ? 'req' : 'mem'}-${item.id}`} className="flex items-center justify-between p-4 border rounded-lg">
             <div className="flex-1">
               <div className="flex items-start gap-3">
                 <User className="h-5 w-5 mt-1 text-primary" />

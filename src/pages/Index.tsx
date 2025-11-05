@@ -28,6 +28,7 @@ const Index = () => {
     return saved ? JSON.parse(saved) : null;
   });
   const [requestCount, setRequestCount] = useState(0);
+  const [accountRequestCount, setAccountRequestCount] = useState(0);
   const [userReservationStatus, setUserReservationStatus] = useState({ hasApproved: false, hasRejected: false });
 
   // Fetch request count for admin
@@ -41,6 +42,25 @@ const Index = () => {
         }
       } catch (error) {
         console.error('Error fetching request count:', error);
+      }
+    }
+  };
+
+  // Fetch account request count for admin (pending member account requests)
+  const fetchAccountRequestCount = async () => {
+    if (currentUser?.role === 'admin') {
+      try {
+        const response = await fetch('https://libraryassistantapp.onrender.com/api/account-requests');
+        console.debug('fetchAccountRequestCount status:', response.status);
+        if (response.ok) {
+          const data = await response.json();
+          console.debug('fetchAccountRequestCount data length:', Array.isArray(data) ? data.length : 'not-array');
+          setAccountRequestCount(Array.isArray(data) ? data.length : 0);
+        } else {
+          console.warn('fetchAccountRequestCount non-ok response', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching account request count:', error);
       }
     }
   };
@@ -64,9 +84,11 @@ const Index = () => {
 
   React.useEffect(() => {
     fetchRequestCount();
+    fetchAccountRequestCount();
     fetchUserReservationStatus();
     const interval = setInterval(() => {
       fetchRequestCount();
+      fetchAccountRequestCount();
       fetchUserReservationStatus();
     }, 10000); // Update every 10 seconds
     return () => clearInterval(interval);
@@ -200,14 +222,19 @@ const Index = () => {
 
             {currentUser.role === "admin" && (
               <>
-                <Button
-                  variant={currentView === "members" ? "default" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => setCurrentView("members")}
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Member Management
-                </Button>
+                <div className="relative w-full">
+                  <Button
+                    variant={currentView === "members" ? "default" : "ghost"}
+                    className="w-full justify-start"
+                    onClick={() => setCurrentView("members")}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Member Management
+                  </Button>
+                  {accountRequestCount > 0 && (
+                    <span className="absolute right-4 top-1/2 transform -translate-y-1/2 w-2 h-2 bg-green-500 rounded-full"></span>
+                  )}
+                </div>
                 <Button
                   variant={currentView === "issuing" ? "default" : "ghost"}
                   className="w-full justify-start"
