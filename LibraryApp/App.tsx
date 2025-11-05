@@ -456,13 +456,15 @@ const AppContent = () => {
               headerBackTitle: 'Back'
             }}
           />
-          <Stack.Screen 
-            name="Main" 
-            children={() => <MainNavigator user={user} />}
-            options={{
-              headerShown: false
-            }}
-          />
+          {user && (
+            <Stack.Screen 
+              name="Main" 
+              children={() => <MainNavigator user={user} />}
+              options={{
+                headerShown: false
+              }}
+            />
+          )}
         </Stack.Navigator>
         
         {/* Notification Modal */}
