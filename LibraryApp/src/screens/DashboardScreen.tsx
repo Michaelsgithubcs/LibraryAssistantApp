@@ -56,21 +56,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     loadMLRecommendations(); // Automatically fetch ML recommendations
     loadNewBooks(); // Load the newest books
     
-    // Poll for notification updates every 15 seconds to check for approved reservations
+    // Poll for notification updates every 5 seconds for real-time updates
     const notificationInterval = setInterval(() => {
       checkForNewNotifications();
-    }, 15000);
-    // Also poll backend unread count so badge/red dot updates even before opening the notifications screen
-    const unreadInterval = setInterval(() => {
       refreshUnreadCount();
-    }, 30000);
+    }, 5000);
     
     // Initial unread count fetch on mount
     refreshUnreadCount();
     
     return () => {
       clearInterval(notificationInterval);
-      clearInterval(unreadInterval);
     };
   }, []);
   
@@ -86,9 +82,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
   const checkForNewNotifications = async () => {
     try {
       // Backend now creates notifications for approved/rejected reservations
-      // This just updates local state for display purposes
+      // Fetch updated reservations and refresh dashboard stats
       const reservations = await apiClient.getReservationStatus(user.id);
       setUserReservations(reservations);
+      
+      // Update stats immediately to reflect reservation changes
+      const pendingCount = reservations.filter((r: ReservationStatus) => r.status === 'pending').length;
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
+      
+      setStats(prev => ({
+        ...prev,
+        reservations: pendingCount,
+        reservationStatus: { hasApproved, hasRejected }
+      }));
     } catch (error) {
       console.log('Error checking reservations:', error);
     }
