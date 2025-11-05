@@ -10,6 +10,7 @@ import { Search, User, Mail, Plus, Edit, Trash2, UserX } from "lucide-react";
 
 export const EnhancedMemberManagement = () => {
   const [members, setMembers] = useState([]);
+  const [accountRequests, setAccountRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -32,6 +33,7 @@ export const EnhancedMemberManagement = () => {
 
   useEffect(() => {
     fetchMembers();
+    fetchAccountRequests();
   }, []);
 
   const fetchMembers = async () => {
@@ -46,12 +48,55 @@ export const EnhancedMemberManagement = () => {
     setLoading(false);
   };
 
+  const fetchAccountRequests = async () => {
+    try {
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/account-requests');
+      const data = await response.json();
+      setAccountRequests(data);
+    } catch (error) {
+      console.error('Error fetching account requests:', error);
+      setAccountRequests([]);
+    }
+  };
+
+  const approveAccountRequest = async (requestId) => {
+    if (!confirm('Are you sure you want to approve this account request?')) return;
+    
+    try {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/account-requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved_by: 1 }) // You can replace with actual admin ID
+      });
+      
+      if (response.ok) {
+        alert('Account request approved successfully!');
+        fetchMembers();
+        fetchAccountRequests();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to approve account request');
+      }
+    } catch (error) {
+      alert('Failed to approve account request');
+    }
+  };
+
   const filteredMembers = members
     .filter(member =>
       member.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.email.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => a.username.toLowerCase().localeCompare(b.username.toLowerCase()));
+
+  const filteredRequests = accountRequests
+    .filter(request =>
+      request.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      request.email.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.username.toLowerCase().localeCompare(b.username.toLowerCase()));
+
+  const allDisplayItems = [...filteredRequests.map(r => ({...r, isPending: true})), ...filteredMembers];
 
   const addMember = async () => {
     try {
@@ -160,112 +205,7 @@ export const EnhancedMemberManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold">Member Management</h2>
-          <p className="text-muted-foreground">Manage library members</p>
-        </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Member
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Search Members
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Input
-            placeholder="Search by username or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Members ({members.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredMembers.map((member) => (
-              <div key={member.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-start gap-3">
-                    <User className="h-5 w-5 mt-1 text-primary" />
-                    <div>
-                      <h4 className="font-semibold">{member.username}</h4>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Mail className="h-4 w-4" />
-                        <span>{member.email}</span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <Badge variant="outline">{member.role}</Badge>
-                        <Badge variant={member.status === "active" ? "default" : "destructive"}>
-                          {member.status}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Joined: {member.created_at ? new Date(member.created_at).toLocaleDateString() : 'N/A'}
-                        </span>
-                        {member.role !== 'admin' && (
-                          <span className="text-xs text-muted-foreground">
-                            Books: {member.books_issued || 0}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedMember(member);
-                      setEditMember({
-                        username: member.username,
-                        email: member.email,
-                        password: "",
-                        role: member.role
-                      });
-                      setShowEditDialog(true);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedMember(member);
-                      if (member.status === "suspended") {
-                        unsuspendMember(member.id);
-                      } else {
-                        setShowSuspendDialog(true);
-                      }
-                    }}
-                  >
-                    <UserX className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => deleteMember(member.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* ...existing member list and card rendering code here... */}
       {/* Add Member Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
@@ -315,40 +255,22 @@ export const EnhancedMemberManagement = () => {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Edit Member Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Member</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Username</Label>
-              <Input
-                value={editMember.username}
-                onChange={(e) => setEditMember({ ...editMember, username: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={editMember.email}
-                onChange={(e) => setEditMember({ ...editMember, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>New Password (leave blank to keep current)</Label>
-              <Input
-                type="password"
-                value={editMember.password}
-                onChange={(e) => setEditMember({ ...editMember, password: e.target.value })}
+          {/* ...existing code for edit dialog... */}
+        </DialogContent>
+      </Dialog>
+    </div>
+                onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
               />
             </div>
             <div>
               <Label>Role</Label>
-              <Select value={editMember.role} onValueChange={(value) => setEditMember({ ...editMember, role: value })}>
+              <Select value={newMember.role} onValueChange={(value) => setNewMember({ ...newMember, role: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -359,42 +281,108 @@ export const EnhancedMemberManagement = () => {
               </Select>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-              <Button onClick={handleEditMember}>Update Member</Button>
+              <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+              <Button onClick={addMember}>Add Member</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Suspend Member Dialog */}
-      <Dialog open={showSuspendDialog} onOpenChange={setShowSuspendDialog}>
+      {/* Edit Member Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Suspend Member</DialogTitle>
-            <DialogDescription>Choose suspension duration for {selectedMember?.username}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Suspension Duration</Label>
-              <Select value={suspendDuration} onValueChange={setSuspendDuration}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1_month">1 Month</SelectItem>
-                  <SelectItem value="2_months">2 Months</SelectItem>
-                  <SelectItem value="3_months">3 Months</SelectItem>
-                  <SelectItem value="lifetime">Lifetime</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-4">
+              {allDisplayItems.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-3">
+                      <User className="h-5 w-5 mt-1 text-primary" />
+                      <div>
+                        <h4 className="font-semibold">{item.username}</h4>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Mail className="h-4 w-4" />
+                          <span>{item.email}</span>
+                        </div>
+                        <div className="flex items-center gap-4 mt-2">
+                          {item.isPending ? (
+                            <>
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">Pending Request</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Requested: {item.requested_at ? new Date(item.requested_at).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Badge variant="outline">{item.role}</Badge>
+                              <Badge variant={item.status === "active" ? "default" : "destructive"}>
+                                {item.status}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                Joined: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}
+                              </span>
+                              {item.role !== 'admin' && (
+                                <span className="text-xs text-muted-foreground">
+                                  Books: {item.books_issued || 0}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {item.isPending ? (
+                      <Button
+                        className="bg-green-500 hover:bg-green-600 text-white"
+                        size="sm"
+                        onClick={() => approveAccountRequest(item.id)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMember(item);
+                            setEditMember({
+                              username: item.username,
+                              email: item.email,
+                              password: "",
+                              role: item.role
+                            });
+                            setShowEditDialog(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMember(item);
+                            if (item.status === "suspended") {
+                              unsuspendMember(item.id);
+                            } else {
+                              setShowSuspendDialog(true);
+                            }
+                          }}
+                        >
+                          <UserX className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteMember(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowSuspendDialog(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={suspendMember}>Suspend Member</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};

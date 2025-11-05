@@ -107,8 +107,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
             Demo accounts: user@library.com / user
           </Text>
           <Button
-            title="Create New Account"
-            onPress={() => Alert.alert('Coming Soon', 'Account registration will be available soon. Please contact the library for now.')}
+            title="Request Account Creation"
+            onPress={() => navigation.navigate('AccountRequest')}
             variant="outline"
             style={styles.signupButton}
           />

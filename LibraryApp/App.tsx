@@ -18,6 +18,7 @@ import { Provider } from 'react-redux';
 import { store } from './src/store';
 import { useAuth } from './src/hooks/useAuth';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { AccountRequestScreen } from './src/screens/AccountRequestScreen';
 import { useNotifications, NotificationContext } from './src/components/NotificationProvider';
 import NotificationProvider from './src/components/NotificationProvider';
 
@@ -445,6 +446,15 @@ const AppContent = () => {
             name="Login"
             component={LoginScreen}
             options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AccountRequest"
+            component={AccountRequestScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Request Account',
+              headerBackTitle: 'Back'
+            }}
           />
           <Stack.Screen 
             name="Main" 
