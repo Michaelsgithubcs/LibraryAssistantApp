@@ -205,7 +205,21 @@ export const EnhancedMemberManagement = () => {
 
   return (
     <div className="space-y-6">
-      {/* ...existing member list and card rendering code here... */}
+      <div className="flex justify-between items-center">
+        <div className="relative flex items-center">
+          <h2 className="text-3xl font-bold">Member Management</h2>
+          {accountRequests.length > 0 && (
+            <span className="absolute -top-1 -right-4 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+          )}
+        </div>
+        <Button onClick={() => setShowAddDialog(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Member
+        </Button>
+      </div>
       {/* Add Member Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
