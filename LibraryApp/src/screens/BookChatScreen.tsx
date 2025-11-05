@@ -202,7 +202,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
     // Wait a moment to show transcribing status
     await new Promise<void>(resolve => setTimeout(() => resolve(), 300));
 
-    // Replace "Transcribing..." with the actual transcribed text
+    // Replace "Transcribing..." with the actual transcribed text and clear transcribing state
     setMessages(prev =>
       prev.map(m =>
         m.id === transcribingMessageId
@@ -210,10 +210,13 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           : m
       )
     );
+    
+    // Clear transcribing state immediately after replacing text
     setIsTranscribing(false);
+    const messageId = transcribingMessageId;
     setTranscribingMessageId(null);
 
-    // Now send the transcribed text to the AI
+    // Now send the transcribed text to the AI (message will show actual text, not "Transcribing...")
     await sendVoiceMessage(transcribedText);
   };
 

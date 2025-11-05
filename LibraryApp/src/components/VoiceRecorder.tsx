@@ -165,6 +165,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       console.log('🎤 Starting voice recording...');
       setIsRecording(true);
       setRecordedText('');
+      recordedTextRef.current = '';
       onTranscriptionStart();
       onRecordingStateChange?.(true);
       
@@ -180,18 +181,42 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }
   };
 
-
+  const cancelRecording = async () => {
+    try {
+      console.log('🚫 Cancelling recording...');
+      await Voice.stop();
+      await Voice.cancel();
+      setIsRecording(false);
+      setRecordedText('');
+      recordedTextRef.current = '';
+      onRecordingStateChange?.(false);
+      console.log('Recording cancelled');
+    } catch (error) {
+      console.error('Error cancelling recording:', error);
+      setIsRecording(false);
+      onRecordingStateChange?.(false);
+    }
+  };
 
   const handleMicPress = () => {
     if (disabled) return;
     startRecording();
   };
 
+  const handleWaveformPress = () => {
+    // Tapping waveform cancels the recording
+    cancelRecording();
+  };
+
   return (
     <View style={styles.container}>
       {isRecording ? (
-        // Show waveform when recording (no buttons)
-        <View style={styles.waveformContainer}>
+        // Show waveform when recording - tap to cancel
+        <TouchableOpacity 
+          onPress={handleWaveformPress}
+          activeOpacity={0.7}
+          style={styles.waveformContainer}
+        >
           {waveAnimations.map((anim, index) => (
             <Animated.View
               key={index}
@@ -203,7 +228,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
               ]}
             />
           ))}
-        </View>
+        </TouchableOpacity>
       ) : (
         // Show mic button when not recording
         <TouchableOpacity

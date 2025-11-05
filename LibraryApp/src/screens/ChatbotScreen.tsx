@@ -200,7 +200,7 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     // Wait a moment to show transcribing status
     await new Promise<void>(resolve => setTimeout(() => resolve(), 300));
 
-    // Replace "Transcribing..." with the actual transcribed text
+    // Replace "Transcribing..." with the actual transcribed text and clear transcribing state
     setMessages(prev =>
       prev.map(m =>
         m.id === transcribingMessageId
@@ -208,18 +208,21 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
           : m
       )
     );
+    
+    // Clear transcribing state immediately after replacing text
     setIsTranscribing(false);
+    const messageId = transcribingMessageId;
     setTranscribingMessageId(null);
 
     // Save to local storage
     const updatedMessages = messages.map(m =>
-      m.id === transcribingMessageId
+      m.id === messageId
         ? { ...m, text: transcribedText }
         : m
     );
     saveToLocalStorage(updatedMessages);
 
-    // Now send the transcribed text to the AI
+    // Now send the transcribed text to the AI (message will show actual text, not "Transcribing...")
     await sendVoiceMessage(transcribedText);
   };
 
