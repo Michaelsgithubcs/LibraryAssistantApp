@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { VoiceRecorder } from '../components/VoiceRecorder';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
@@ -32,6 +33,8 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   const [isTyping, setIsTyping] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribingMessageId, setTranscribingMessageId] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Create refs for message animations
@@ -170,6 +173,105 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     } catch (error) {
       console.error('Error saving to local storage:', error);
     }
+  };
+
+  const handleVoiceTranscriptionStart = () => {
+    // Create a "Transcribing..." message
+    const transcribingMessage: Message = {
+      id: `transcribing-${Date.now()}`,
+      text: 'Transcribing...',
+      isUser: true,
+      timestamp: new Date(),
+      replyTo: replyingTo || undefined,
+    };
+    
+    setTranscribingMessageId(transcribingMessage.id);
+    setMessages(prev => [...prev, transcribingMessage]);
+    setIsTranscribing(true);
+    setReplyingTo(null);
+  };
+
+  const handleVoiceTranscriptionComplete = async (transcribedText: string) => {
+    if (!transcribedText.trim()) {
+      // Remove the "Transcribing..." message if no text
+      setMessages(prev => prev.filter(m => m.id !== transcribingMessageId));
+      setIsTranscribing(false);
+      setTranscribingMessageId(null);
+      return;
+    }
+
+    // Replace "Transcribing..." with the actual transcribed text
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === transcribingMessageId
+          ? { ...m, text: transcribedText }
+          : m
+      )
+    );
+    setIsTranscribing(false);
+    setTranscribingMessageId(null);
+
+    // Save to local storage
+    const updatedMessages = messages.map(m =>
+      m.id === transcribingMessageId
+        ? { ...m, text: transcribedText }
+        : m
+    );
+    saveToLocalStorage(updatedMessages);
+
+    // Now send the transcribed text to the AI
+    await sendVoiceMessage(transcribedText);
+  };
+
+  const sendVoiceMessage = async (messageText: string) => {
+    setIsTyping(true);
+
+    // Save user message to database (optional)
+    if (conversationId) {
+      try {
+        await apiClient.saveMessage(
+          conversationId,
+          user.id,
+          messageText,
+          true,
+          undefined
+        );
+      } catch (error) {
+        console.log('Could not save to database, using local storage');
+      }
+    }
+
+    // Simulate typing delay
+    setTimeout(async () => {
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: generateResponse(messageText),
+        isUser: false,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => {
+        const updated = [...prev, botResponse];
+        saveToLocalStorage(updated);
+        return updated;
+      });
+      setIsTyping(false);
+
+      // Save bot response to database (optional)
+      if (conversationId) {
+        try {
+          await apiClient.saveMessage(
+            conversationId,
+            user.id,
+            botResponse.text,
+            false,
+            undefined
+          );
+        } catch (error) {
+          console.log('Could not save to database, using local storage');
+        }
+      }
+    }, 1500);
   };
 
   const sendMessage = async (): Promise<void> => {
@@ -323,12 +425,21 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
                         </Text>
                       </View>
                     )}
-                    <Text style={[
-                      message.isUser ? styles.userText : styles.botText,
-                      { fontSize: 15 }
-                    ]}>
-                      {message.text}
-                    </Text>
+                    {message.isUser && message.text === 'Transcribing...' ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.userText, { fontSize: 15, color: colors.text.muted }]}>
+                          {message.text}
+                        </Text>
+                        <ActivityIndicator size="small" color={colors.text.muted} />
+                      </View>
+                    ) : (
+                      <Text style={[
+                        message.isUser ? styles.userText : styles.botText,
+                        { fontSize: 15 }
+                      ]}>
+                        {message.text}
+                      </Text>
+                    )}
                     <Text style={[
                       commonStyles.textMuted,
                       styles.timestamp,
@@ -402,6 +513,11 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
                 containerStyle={{ flex: 1, margin: 0 }}
               />
               <View style={styles.inputButtonsWrapper}>
+                <VoiceRecorder
+                  onTranscriptionStart={handleVoiceTranscriptionStart}
+                  onTranscriptionComplete={handleVoiceTranscriptionComplete}
+                  disabled={isTyping || isTranscribing}
+                />
                 <TouchableOpacity
                   onPress={sendMessage}
                   disabled={!inputText.trim() || isTyping}

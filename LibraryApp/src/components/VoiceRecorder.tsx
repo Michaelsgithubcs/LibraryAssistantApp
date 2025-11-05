@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Animated, Easing, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, Animated, Easing, Image, Dimensions } from 'react-native';
 import Voice from 'react-native-voice';
 import Svg, { Path } from 'react-native-svg';
 import { colors } from '../styles/colors';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const NUM_BARS = 40; // Number of waveform bars
 
 interface VoiceRecorderProps {
   onTranscriptionComplete: (text: string) => void;
@@ -18,15 +21,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   disabled = false,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [voiceLevel, setVoiceLevel] = useState(0);
   const [recordedText, setRecordedText] = useState<string>('');
   
-  // Animation values for waveform bars (fewer bars for compact view)
-  const waveAnimations = useRef([
-    new Animated.Value(0.3),
-    new Animated.Value(0.5),
-    new Animated.Value(0.4),
-  ]).current;
+  // Animation values for waveform bars - many bars for full-width effect
+  const waveAnimations = useRef(
+    Array.from({ length: NUM_BARS }, () => new Animated.Value(0.2 + Math.random() * 0.3))
+  ).current;
 
   // Pulsing animation for mic button
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -107,11 +107,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   };
 
   const onSpeechResults = (e: any) => {
-    console.log('Speech results', e);
+    console.log('Speech results received:', e);
     if (e.value && e.value.length > 0) {
       const transcribedText = e.value[0];
+      console.log('Transcribed text:', transcribedText);
       setRecordedText(transcribedText);
-      // Don't auto-send - wait for user to click send button
     }
   };
 
@@ -121,21 +121,36 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   };
 
   const onSpeechVolumeChanged = (e: any) => {
-    // Update voice level for visual feedback
-    if (e.value) {
-      setVoiceLevel(Math.min(e.value / 10, 1)); // Normalize to 0-1
+    // Update waveform based on voice level
+    if (e.value && isRecording) {
+      const level = Math.min(e.value / 10, 1);
+      // Animate random bars based on volume
+      const randomBars = Array.from({ length: 5 }, () => Math.floor(Math.random() * NUM_BARS));
+      randomBars.forEach(barIndex => {
+        Animated.timing(waveAnimations[barIndex], {
+          toValue: 0.3 + level * 0.7,
+          duration: 100,
+          useNativeDriver: true,
+        }).start();
+      });
     }
   };
 
   const startRecording = async () => {
     try {
+      console.log('🎤 Starting voice recording...');
       setIsRecording(true);
       setRecordedText('');
       onTranscriptionStart();
       onRecordingStateChange?.(true);
+      
+      const isAvailable = await Voice.isAvailable();
+      console.log('Voice recognition available:', isAvailable);
+      
       await Voice.start('en-US');
+      console.log('✅ Voice.start() called successfully');
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('❌ Error starting recording:', error);
       setIsRecording(false);
       onRecordingStateChange?.(false);
     }
@@ -157,13 +172,24 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 
   const sendRecording = async () => {
     try {
+      console.log('Stopping recording and sending...');
       await Voice.stop();
+      
+      // Wait a moment for final speech results to be processed
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+      
+      console.log('Recorded text to send:', recordedText);
+      
       setIsRecording(false);
       onRecordingStateChange?.(false);
       
       // Send the recorded text
       if (recordedText.trim()) {
+        console.log('Sending transcription:', recordedText);
         onTranscriptionComplete(recordedText);
+      } else {
+        console.log('No text recorded, sending empty');
+        onTranscriptionComplete('');
       }
       setRecordedText('');
     } catch (error) {
@@ -181,18 +207,14 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   return (
     <View style={styles.container}>
       {isRecording ? (
-        // Show stop and send buttons when recording
-        <>
+        // Show full-width waveform with stop button on left when recording
+        <View style={styles.recordingContainer}>
           <TouchableOpacity
-            onPress={stopRecording}
+            onPress={sendRecording}
             activeOpacity={0.7}
-            style={styles.iconButton}
+            style={styles.stopButton}
           >
-            <Image
-              source={require('../../assets/icons/stop.png')}
-              style={styles.iconImage}
-              resizeMode="contain"
-            />
+            <View style={styles.stopSquare} />
           </TouchableOpacity>
           
           <View style={styles.waveformContainer}>
@@ -208,19 +230,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
               />
             ))}
           </View>
-
-          <TouchableOpacity
-            onPress={sendRecording}
-            activeOpacity={0.7}
-            style={styles.iconButton}
-          >
-            <Image
-              source={require('../../assets/icons/send.png')}
-              style={styles.iconImage}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
-        </>
+        </View>
       ) : (
         // Show mic button when not recording
         <TouchableOpacity
@@ -246,7 +256,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+  },
+  
+  recordingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  
+  stopButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  stopSquare: {
+    width: 12,
+    height: 12,
+    backgroundColor: '#fff',
+    borderRadius: 2,
   },
   
   iconButton: {
@@ -264,14 +300,17 @@ const styles = StyleSheet.create({
   waveformContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+    justifyContent: 'space-between',
+    flex: 1,
+    height: 32,
+    gap: 1,
   },
   
   waveBar: {
-    width: 2,
-    height: 16,
+    flex: 1,
     backgroundColor: colors.primary,
-    borderRadius: 1,
+    borderRadius: 2,
+    minHeight: 4,
+    maxHeight: 32,
   },
 });

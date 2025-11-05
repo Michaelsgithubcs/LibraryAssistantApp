@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Animated, Image, ActivityIndicator } from 'react-native';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import Svg, { Path } from 'react-native-svg';
@@ -484,7 +484,14 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
                       </View>
                     )}
                     {message.isUser ? (
-                      <Text style={[commonStyles.text, styles.userText]}>{message.text}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[commonStyles.text, styles.userText, message.text === 'Transcribing...' && { color: colors.text.muted }]}>
+                          {message.text}
+                        </Text>
+                        {message.text === 'Transcribing...' && (
+                          <ActivityIndicator size="small" color={colors.text.muted} />
+                        )}
+                      </View>
                     ) : (
                       <Markdown style={markdownStyles}>{message.text}</Markdown>
                     )}
