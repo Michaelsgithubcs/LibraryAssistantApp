@@ -61,11 +61,13 @@ export const MemberManagement = () => {
     },
   ]);
 
-  const filteredMembers = members.filter(member =>
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.phone.includes(searchTerm)
-  );
+  const filteredMembers = members
+    .filter(member =>
+      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.phone.includes(searchTerm)
+    )
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
   const getStatusColor = (status: Member["status"]) => {
     switch (status) {

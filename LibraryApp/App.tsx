@@ -252,6 +252,64 @@ const TabNavigator = ({ user }: { user: any }) => {
 // Removed NotificationManager component - moved logic directly to AppContent
 
 const MainNavigator = ({ user }: { user: any }) => {
+  const dispatch = useDispatch();
+  const previousNotificationIds = React.useRef<Set<number>>(new Set());
+
+  // Global notification polling - works across all screens
+  React.useEffect(() => {
+    if (!user) return;
+
+    const pollNotifications = async () => {
+      try {
+        const { notificationApi } = await import('./src/services/api');
+        const NotificationService = require('./src/services/NotificationService').default;
+        const { setUnreadCount } = await import('./src/store/slices/notificationSlice');
+        
+        const list = await notificationApi.getUserNotifications(user.id);
+        const unread = Array.isArray(list) ? list.filter((n: any) => n.is_read === 0).length : 0;
+        dispatch(setUnreadCount(unread));
+        
+        // Check for new notifications and trigger push notifications
+        if (Array.isArray(list)) {
+          const isFirstLoad = previousNotificationIds.current.size === 0;
+          
+          list.forEach((notification: any) => {
+            const notifId = notification.id;
+            
+            if (!previousNotificationIds.current.has(notifId)) {
+              previousNotificationIds.current.add(notifId);
+              
+              // Only trigger push notification if this is NOT the first load
+              if (!isFirstLoad) {
+                NotificationService.showLocalNotification({
+                  title: notification.title || 'Library Notification',
+                  message: notification.message || '',
+                  data: {
+                    type: notification.type || 'info',
+                    notificationId: notifId,
+                    ...(notification.data ? JSON.parse(notification.data) : {})
+                  }
+                });
+                
+                console.log(`🔔 Push notification sent: ${notification.title}`);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.log('Error polling notifications:', e);
+      }
+    };
+
+    // Poll immediately on mount
+    pollNotifications();
+
+    // Then poll every 5 seconds
+    const interval = setInterval(pollNotifications, 5000);
+
+    return () => clearInterval(interval);
+  }, [user, dispatch]);
+
   return (
     <Stack.Navigator
       screenOptions={{

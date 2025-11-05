@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, StatusBar, Image, TouchableOpacity, Alert } from 'react-native';
 import { ModernCard } from '../components/ModernCard';
@@ -14,6 +14,7 @@ import { useNotifications } from '../components/NotificationProvider';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { setUnreadCount } from '../store/slices/notificationSlice';
+import NotificationService from '../services/NotificationService';
 
 // Using the updated Book interface from types
 
@@ -26,6 +27,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
   const { showNotification } = useNotifications();
   const dispatch = useDispatch();
   const reduxNotifications = useSelector((state: RootState) => state.notifications.notifications);
+  const previousNotificationIds = useRef<Set<number>>(new Set());
   const [stats, setStats] = useState({
     booksIssued: 0,
     overdueBooks: 0,
@@ -234,6 +236,38 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       const list = await notificationApi.getUserNotifications(user.id);
       const unread = Array.isArray(list) ? list.filter((n: any) => n.is_read === 0).length : 0;
       dispatch(setUnreadCount(unread));
+      
+      // Check for new notifications and trigger push notifications
+      if (Array.isArray(list)) {
+        // On first load, just populate the set without triggering notifications
+        const isFirstLoad = previousNotificationIds.current.size === 0;
+        
+        list.forEach((notification: any) => {
+          const notifId = notification.id;
+          
+          // If this is a new notification we haven't seen before
+          if (!previousNotificationIds.current.has(notifId)) {
+            previousNotificationIds.current.add(notifId);
+            
+            // Only trigger push notification if this is NOT the first load
+            // (we don't want to spam existing notifications on app start)
+            if (!isFirstLoad) {
+              // Trigger push notification (works even when app is in background)
+              NotificationService.showLocalNotification({
+                title: notification.title || 'Library Notification',
+                message: notification.message || '',
+                data: {
+                  type: notification.type || 'info',
+                  notificationId: notifId,
+                  ...JSON.parse(notification.data || '{}')
+                }
+              });
+              
+              console.log(`🔔 Push notification sent: ${notification.title}`);
+            }
+          }
+        });
+      }
     } catch (e) {
       console.log('Error refreshing unread count:', e);
     }
