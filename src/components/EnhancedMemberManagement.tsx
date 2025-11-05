@@ -46,10 +46,12 @@ export const EnhancedMemberManagement = () => {
     setLoading(false);
   };
 
-  const filteredMembers = members.filter(member =>
-    member.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = members
+    .filter(member =>
+      member.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.username.toLowerCase().localeCompare(b.username.toLowerCase()));
 
   const addMember = async () => {
     try {
