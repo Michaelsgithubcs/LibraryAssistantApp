@@ -203,7 +203,7 @@ const Index = () => {
               onClick={() => setCurrentView("books")}
             >
               <BookOpen className="h-4 w-4 mr-2" />
-              Book Search
+              Books
             </Button>
             {currentUser.role === "admin" && (
               <Button
