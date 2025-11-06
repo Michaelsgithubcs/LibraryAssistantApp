@@ -206,8 +206,16 @@ export const EnhancedMemberManagement = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div className="relative flex items-center">
+        <div className="relative flex items-center gap-4">
           <h2 className="text-3xl font-bold">Member Management</h2>
+          {/* Search input: filter members and pending account requests by username or email */}
+          <div className="w-80">
+            <Input
+              value={searchTerm}
+              onChange={(e: any) => setSearchTerm(e.target.value)}
+              placeholder="Search members by username or email"
+            />
+          </div>
           {/* Green dot indicator moved to the sidebar (Index.tsx) */}
       </div>
         <Button onClick={() => setShowAddDialog(true)}>
