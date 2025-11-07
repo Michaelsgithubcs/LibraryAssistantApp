@@ -1026,7 +1026,14 @@ def get_all_fines():
         FROM book_issues bi
         JOIN books b ON bi.book_id = b.id
         JOIN users u ON bi.user_id = u.id
-        WHERE (bi.fine_amount > 0 OR (bi.status = 'issued' AND bi.due_date < date('now')))
+        WHERE (
+            bi.fine_amount > 0
+            OR (
+                bi.status = 'issued'
+                AND bi.due_date < date('now')
+                AND COALESCE(bi.overdue_fee_per_day, 0) > 0
+            )
+        )
         ORDER BY bi.issue_date DESC
     ''')
     fines = cursor.fetchall()
@@ -1122,7 +1129,14 @@ def get_user_fines(user_id):
         FROM book_issues bi
         JOIN books b ON bi.book_id = b.id
         JOIN users u ON bi.user_id = u.id
-        WHERE bi.user_id = ? AND (bi.fine_amount > 0 OR (bi.status = 'issued' AND bi.due_date < date('now')))
+        WHERE bi.user_id = ? AND (
+            bi.fine_amount > 0
+            OR (
+                bi.status = 'issued'
+                AND bi.due_date < date('now')
+                AND COALESCE(bi.overdue_fee_per_day, 0) > 0
+            )
+        )
         ORDER BY bi.issue_date DESC
     ''', (user_id,))
     fines = cursor.fetchall()
