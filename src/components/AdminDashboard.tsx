@@ -22,6 +22,13 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
   useEffect(() => {
     fetchStats();
     fetchRecentBooks();
+
+    // Poll for recent books so the dashboard updates shortly after admins add new books
+    const recentPoll = setInterval(() => {
+      fetchRecentBooks();
+    }, 10000); // every 10 seconds
+
+    return () => clearInterval(recentPoll);
   }, []);
 
   const fetchStats = async () => {

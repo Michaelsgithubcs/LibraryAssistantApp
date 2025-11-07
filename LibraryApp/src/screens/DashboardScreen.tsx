@@ -64,11 +64,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       refreshUnreadCount();
     }, 5000);
     
+    // Poll for new books so mobile dashboard shows recently added books shortly after upload
+    const newBooksPoll = setInterval(() => {
+      loadNewBooks();
+    }, 15000); // every 15 seconds
+    
     // Initial unread count fetch on mount
     refreshUnreadCount();
     
     return () => {
       clearInterval(notificationInterval);
+      clearInterval(newBooksPoll);
     };
   }, []);
   
