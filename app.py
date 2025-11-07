@@ -237,7 +237,7 @@ def get_books():
         query += ' AND b.is_ebook = ?'
         params.append(1 if is_ebook == 'true' else 0)
     
-    query += ' GROUP BY b.id ORDER BY b.title ASC'
+    query += ' GROUP BY b.id ORDER BY b.created_at DESC'
     
     cursor.execute(query, params)
     books = cursor.fetchall()
