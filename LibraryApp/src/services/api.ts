@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Book, IssuedBook, User, ReservationStatus, Fine, HistoryItem } from '../types';
 
 // Production API URL on Render
-const API_BASE = 'https://libraryassistantapp.onrender.com/api'; 
+export const API_BASE = 'https://libraryassistantapp.onrender.com/api'; 
 
 export const apiClient = {
   async login(email: string, password: string): Promise<User> {

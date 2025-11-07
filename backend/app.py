@@ -14,6 +14,14 @@ import secrets
 import google.generativeai as genai
 from recommendation_service import RecommendationService
 from ml_recommendation_service import MLRecommendationService
+import requests
+try:
+    # prefer the HTTP v1 FCM helper if available
+    from backend.fcm import send_fcm_v1, get_access_token
+    FCM_V1_AVAILABLE = True
+except Exception:
+    send_fcm_v1 = None
+    FCM_V1_AVAILABLE = False
 
 app = Flask(__name__)
 CORS(app)
@@ -32,6 +40,9 @@ print(f"[Startup] Using database at: {os.path.abspath(DATABASE)}")
 GENAI_API_KEY = os.environ.get('GEMINI_API_KEY')
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
+
+# FCM server key for sending push notifications (optional)
+FCM_SERVER_KEY = os.environ.get('FCM_SERVER_KEY')
 
 def init_db():
     conn = sqlite3.connect(DATABASE)
@@ -130,6 +141,20 @@ def init_db():
             FOREIGN KEY (paid_by) REFERENCES users (id)
         )
     ''')
+
+    # Device tokens table - stores push tokens for user's devices
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS device_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            token TEXT,
+            platform TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, token),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
     
     # Reading progress table
     cursor.execute('''
@@ -222,6 +247,78 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+
+def send_fcm(token: str, title: str, message: str, data: dict = None) -> bool:
+    """Send a push notification to a single device token via FCM (legacy API).
+    This is a best-effort helper — if no FCM_SERVER_KEY is configured it will
+    simply return False so the server can fallback to storing an in-app
+    notification only.
+    """
+    if not FCM_SERVER_KEY:
+        print('[Push] FCM server key not configured; skipping push send')
+        return False
+
+    payload = {
+        'to': token,
+        'notification': {
+            'title': title,
+            'body': message,
+        },
+        'data': data or {}
+    }
+
+    headers = {
+        'Authorization': f'key={FCM_SERVER_KEY}',
+        'Content-Type': 'application/json'
+    }
+
+    try:
+        # If v1 helper is available and credentials are set, use it
+        if FCM_V1_AVAILABLE and os.environ.get('GOOGLE_APPLICATION_CREDENTIALS') and os.environ.get('FCM_PROJECT_ID'):
+            try:
+                send_fcm_v1(token, title, message, data or {})
+                print(f'[Push] Sent FCM v1 push to token (truncated): {str(token)[:10]}...')
+                return True
+            except Exception as e:
+                print(f'[Push] FCM v1 send failed, falling back to legacy: {e}')
+
+        resp = requests.post('https://fcm.googleapis.com/fcm/send', json=payload, headers=headers, timeout=5)
+        if resp.status_code >= 200 and resp.status_code < 300:
+            print(f'[Push] Sent FCM push to token (truncated): {token[:10]}...')
+            return True
+        else:
+            print(f'[Push] FCM send failed: {resp.status_code} {resp.text}')
+            return False
+    except Exception as e:
+        print(f'[Push] Exception when sending FCM: {e}')
+        return False
+
+
+def send_push_to_user(user_id: int, title: str, message: str, data: dict = None):
+    """Fetch device tokens for a user and attempt to send a push to each.
+    Falls back silently if no tokens are present or sending fails.
+    """
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('SELECT token, platform FROM device_tokens WHERE user_id = ?', (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            print(f'[Push] No device tokens for user {user_id}')
+            return False
+
+        sent_any = False
+        for token, platform in rows:
+            ok = send_fcm(token, title, message, data or {})
+            sent_any = sent_any or ok
+
+        return sent_any
+    except Exception as e:
+        print(f'[Push] Error while sending push to user {user_id}: {e}')
+        return False
 
 # API Routes
 @app.route('/api/books', methods=['GET'])
@@ -1593,6 +1690,11 @@ def approve_reservation(request_id):
                 f'{{"reservationId": {request_id}, "bookTitle": "{book_title}", "bookId": {book_id}, "timestamp": "{local_timestamp}"}}',
                 local_timestamp
             ))
+            # Best-effort: attempt to send a push to the user's devices
+            try:
+                send_push_to_user(user_id, 'Reservation Approved', f'Your reservation for "{book_title}" has been approved. Please collect it within 3 days.', {"reservationId": request_id, "bookTitle": book_title, "bookId": book_id, "timestamp": local_timestamp})
+            except Exception as e:
+                print(f'[Push] reservation approved push error: {e}')
         
         conn.commit()
         return jsonify({'message': 'Reservation approved and book issued'})
@@ -1637,6 +1739,10 @@ def reject_reservation(request_id):
                 f'{{"reservationId": {request_id}, "bookTitle": "{book_title}", "bookId": {book_id}, "timestamp": "{local_timestamp}"}}',
                 local_timestamp
             ))
+            try:
+                send_push_to_user(user_id, 'Reservation Rejected', f'Your reservation for "{book_title}" was rejected. Reason: {reason}', {"reservationId": request_id, "bookTitle": book_title, "bookId": book_id, "timestamp": local_timestamp})
+            except Exception as e:
+                print(f'[Push] reservation rejected push error: {e}')
         
         conn.commit()
         return jsonify({'message': 'Reservation rejected'})
@@ -1735,9 +1841,48 @@ def create_notification(user_id):
         ))
         
         notification_id = cursor.lastrowid
+        # Attempt to send a push notification to the user's devices (best-effort)
+        try:
+            # data.get('data') may be a dict or a JSON string; pass a dict when possible
+            payload_data = data.get('data', {}) if isinstance(data.get('data', {}), dict) else {}
+            send_push_to_user(user_id, data.get('title', ''), data.get('message', ''), payload_data)
+        except Exception as e:
+            print(f'[Push] create_notification push error: {e}')
         conn.commit()
         conn.close()
         return jsonify({'id': notification_id, 'message': 'Notification created successfully'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/users/<int:user_id>/device-tokens', methods=['POST'])
+def register_device_token(user_id):
+    data = request.json or {}
+    token = data.get('token')
+    platform = data.get('platform', '')
+
+    if not token:
+        return jsonify({'error': 'Missing token'}), 400
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    try:
+        # Try to insert; if token already exists for user, update last_seen
+        try:
+            cursor.execute('''
+                INSERT INTO device_tokens (user_id, token, platform, last_seen)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, token, platform))
+        except sqlite3.IntegrityError:
+            cursor.execute('''
+                UPDATE device_tokens SET last_seen = CURRENT_TIMESTAMP, platform = ?
+                WHERE user_id = ? AND token = ?
+            ''', (platform, user_id, token))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Device token registered'})
     except Exception as e:
         conn.close()
         return jsonify({'error': str(e)}), 500

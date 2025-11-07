@@ -2,6 +2,8 @@ import PushNotification, { PushNotification as PN } from 'react-native-push-noti
 import PushNotificationIOS from '@react-native-community/push-notification-ios';
 import { Platform } from 'react-native';
 import { store, type AppDispatch } from '../store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE } from './api';
 import { addNotification } from '../store/slices/notificationSlice';
 
 export interface NotificationData {
@@ -47,6 +49,28 @@ class NotificationService {
         // Called when token is generated
         onRegister: (token: any) => {
           console.log('TOKEN:', token);
+          // Best-effort: register device token with backend if a logged-in user exists
+          (async () => {
+            try {
+              const userJson = await AsyncStorage.getItem('user');
+              if (!userJson) return;
+              const user = JSON.parse(userJson);
+              const userId = user?.id;
+              if (!userId) return;
+
+              // token may be an object { os, token } or a string
+              const actualToken = (typeof token === 'string') ? token : (token?.token || token?.data || '');
+              if (!actualToken) return;
+
+              await fetch(`${API_BASE}/users/${userId}/device-tokens`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: actualToken, platform: Platform.OS })
+              });
+            } catch (e) {
+              console.warn('Failed to register device token with backend:', e);
+            }
+          })();
         },
         // Called when a notification is received
         onNotification: (notification: any) => {
