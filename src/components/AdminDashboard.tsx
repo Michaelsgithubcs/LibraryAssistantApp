@@ -14,6 +14,8 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
     activeMembers: 0,
     overdueBooks: 0,
     totalFines: 0,
+    damageFines: 0,
+    overdueFines: 0,
     newMembers: 0,
     bookRequests: 0,
   });
@@ -43,7 +45,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       const overdueData = overdueResponse.ok ? await overdueResponse.json() : { count: 0 };
       
       const finesResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/fines-count');
-      const finesData = finesResponse.ok ? await finesResponse.json() : { amount: 0 };
+  const finesData = finesResponse.ok ? await finesResponse.json() : { amount: 0, damage_total: 0, overdue_total: 0 };
       
       const requestsResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/reservation-requests/count');
       const requestsData = requestsResponse.ok ? await requestsResponse.json() : { count: 0 };
@@ -65,6 +67,8 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
         activeMembers: activeMembers,
         overdueBooks: overdueData.count,
         totalFines: finesData.amount,
+        damageFines: finesData.damage_total || 0,
+        overdueFines: finesData.overdue_total || 0,
         newMembers: newMembers,
         bookRequests: requestsData.count
       });
@@ -76,6 +80,8 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
         activeMembers: 0,
         overdueBooks: 0,
         totalFines: 0,
+        damageFines: 0,
+        overdueFines: 0,
         newMembers: 0,
         bookRequests: 0
       });
@@ -160,19 +166,21 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
           </CardContent>
         </Card>
 
-        {/* Total Fines */}
+        {/* Overdue Fines */}
         <Card className="cursor-pointer hover:bg-muted/50" onClick={() => onNavigate?.('fines')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Fines</CardTitle>
+            <CardTitle className="text-sm font-medium">Overdue Fines</CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-red-600 mb-2">R{stats.totalFines.toFixed(2)}</div>
+            <div className="text-3xl font-bold text-red-600 mb-2">R{(stats.overdueFines || 0).toFixed(2)}</div>
             <p className="text-sm text-muted-foreground">
-              Outstanding amount from all users. Click to view and manage fines.
+              Outstanding overdue charges across users. Click to view and manage fines.
             </p>
           </CardContent>
         </Card>
+
+        {/* Damage Fines card intentionally removed per admin request */}
       </div>
 
 

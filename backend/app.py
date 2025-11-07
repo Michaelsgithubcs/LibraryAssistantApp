@@ -116,6 +116,20 @@ def init_db():
         cursor.execute('ALTER TABLE book_issues ADD COLUMN damage_description TEXT')
     except sqlite3.OperationalError:
         pass
+
+    # Fine payments table (records individual payments for audit/history)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fine_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fine_id INTEGER,
+            payment_type TEXT,
+            amount DECIMAL(10,2) DEFAULT 0,
+            paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            paid_by INTEGER,
+            FOREIGN KEY (fine_id) REFERENCES book_issues (id),
+            FOREIGN KEY (paid_by) REFERENCES users (id)
+        )
+    ''')
     
     # Reading progress table
     cursor.execute('''
@@ -1010,9 +1024,14 @@ def get_fines_count():
     ''')
     result = cursor.fetchone()
     total_amount = float(result[0] or 0) + float(result[1] or 0)
-    
+    damage_total = float(result[0] or 0)
+    overdue_total = float(result[1] or 0)
     conn.close()
-    return jsonify({'amount': total_amount})
+    return jsonify({
+        'amount': damage_total + overdue_total,
+        'damage_total': damage_total,
+        'overdue_total': overdue_total
+    })
 
 @app.route('/api/admin/fines', methods=['GET'])
 def get_all_fines():
@@ -1171,29 +1190,140 @@ def get_user_fines(user_id):
     conn.close()
     return jsonify(fine_list)
 
+
+@app.route('/api/admin/fines/paid', methods=['GET'])
+def get_admin_paid_fines():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT fp.id, fp.fine_id, fp.payment_type, fp.amount, fp.paid_at, fp.paid_by,
+               bi.user_id, u.username, u.email,
+               b.title, b.author
+        FROM fine_payments fp
+        JOIN book_issues bi ON fp.fine_id = bi.id
+        JOIN users u ON bi.user_id = u.id
+        JOIN books b ON bi.book_id = b.id
+        ORDER BY fp.paid_at DESC
+    ''')
+
+    rows = cursor.fetchall()
+    result = []
+    for r in rows:
+        result.append({
+            'paymentId': r[0],
+            'fineId': r[1],
+            'type': r[2],
+            'amount': float(r[3] or 0),
+            'paidAt': r[4],
+            'paidBy': r[5],
+            'userId': r[6],
+            'username': r[7],
+            'email': r[8],
+            'bookTitle': r[9],
+            'bookAuthor': r[10]
+        })
+
+    conn.close()
+    return jsonify(result)
+
+
+@app.route('/api/user/<int:user_id>/fines/paid', methods=['GET'])
+def get_user_paid_fines(user_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT fp.id, fp.fine_id, fp.payment_type, fp.amount, fp.paid_at,
+               b.title, b.author
+        FROM fine_payments fp
+        JOIN book_issues bi ON fp.fine_id = bi.id
+        JOIN books b ON bi.book_id = b.id
+        WHERE bi.user_id = ?
+        ORDER BY fp.paid_at DESC
+    ''', (user_id,))
+
+    rows = cursor.fetchall()
+    result = []
+    for r in rows:
+        result.append({
+            'paymentId': r[0],
+            'fineId': r[1],
+            'type': r[2],
+            'amount': float(r[3] or 0),
+            'paidAt': r[4],
+            'bookTitle': r[5],
+            'bookAuthor': r[6]
+        })
+
+    conn.close()
+    return jsonify(result)
+
 @app.route('/api/admin/fines/<int:fine_id>/pay-damage', methods=['POST'])
 def pay_damage_fine(fine_id):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
+    # Get current damage fine amount
+    cursor.execute('SELECT fine_amount, user_id FROM book_issues WHERE id = ?', (fine_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Fine not found'}), 404
+
+    fine_amount = float(row[0] or 0)
+    paid_by = request.json.get('paid_by') if request.json else None
+
+    if fine_amount > 0:
+        # Record payment
+        cursor.execute('INSERT INTO fine_payments (fine_id, payment_type, amount, paid_by) VALUES (?, ?, ?, ?)',
+                       (fine_id, 'damage', fine_amount, paid_by))
+
+    # Mark as paid
     cursor.execute('UPDATE book_issues SET fine_amount = 0 WHERE id = ?', (fine_id,))
-    
+
     conn.commit()
     conn.close()
-    
-    return jsonify({'message': 'Damage fine paid successfully'})
+
+    return jsonify({'message': 'Damage fine paid successfully', 'paid_amount': fine_amount})
 
 @app.route('/api/admin/fines/<int:fine_id>/pay-overdue', methods=['POST'])
 def pay_overdue_fine(fine_id):
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
+    # Get current overdue fee per day and due_date/status
+    cursor.execute('SELECT overdue_fee_per_day, due_date, status FROM book_issues WHERE id = ?', (fine_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Fine not found'}), 404
+
+    overdue_fee_per_day = float(row[0] or 0)
+    due_date = row[1]
+    status = row[2]
+    paid_by = request.json.get('paid_by') if request.json else None
+
+    overdue_amount = 0
+    if status == 'issued' and due_date:
+        from datetime import datetime
+        due = datetime.strptime(due_date, '%Y-%m-%d').date()
+        today = datetime.now().date()
+        if today > due and overdue_fee_per_day > 0:
+            days_overdue = (today - due).days
+            overdue_amount = days_overdue * overdue_fee_per_day
+
+    if overdue_amount > 0:
+        cursor.execute('INSERT INTO fine_payments (fine_id, payment_type, amount, paid_by) VALUES (?, ?, ?, ?)',
+                       (fine_id, 'overdue', overdue_amount, paid_by))
+
+    # Zero out overdue fee per day so it no longer accrues
     cursor.execute('UPDATE book_issues SET overdue_fee_per_day = 0 WHERE id = ?', (fine_id,))
-    
+
     conn.commit()
     conn.close()
-    
-    return jsonify({'message': 'Overdue fine paid successfully'})
+
+    return jsonify({'message': 'Overdue fine paid successfully', 'paid_amount': overdue_amount})
 
 @app.route('/api/user/<int:user_id>/issued-books', methods=['GET'])
 def get_user_issued_books(user_id):

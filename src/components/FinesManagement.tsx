@@ -26,10 +26,14 @@ interface FinesManagementProps {
 export const FinesManagement = ({ user }: FinesManagementProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [fines, setFines] = useState<Fine[]>([]);
+  const [paidFines, setPaidFines] = useState<any[]>([]);
+  const [overdueTotal, setOverdueTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     fetchFines();
+    fetchPaidFines();
+    fetchFinesSummary();
   }, [user.id, user.role]);
 
   const fetchFines = async () => {
@@ -49,11 +53,101 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
     setLoading(false);
   };
 
-  const filteredFines = fines.filter(fine =>
+  const fetchPaidFines = async () => {
+    try {
+      const endpoint = user.role === 'admin'
+        ? 'https://libraryassistantapp.onrender.com/api/admin/fines/paid'
+        : `https://libraryassistantapp.onrender.com/api/user/${user.id}/fines/paid`;
+
+      const response = await fetch(endpoint);
+      if (response.ok) {
+        const data = await response.json();
+        setPaidFines(data);
+      }
+    } catch (error) {
+      console.error('Error fetching paid fines:', error);
+    }
+  };
+
+  // fetchFinesSummary already declared above
+
+  const fetchFinesSummary = async () => {
+    try {
+      if (user.role !== 'admin') return;
+      const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/fines-count');
+      if (response.ok) {
+        const data = await response.json();
+        setOverdueTotal(parseFloat((data.overdue_total || data.overdueTotal || 0).toString()));
+      }
+    } catch (error) {
+      console.error('Error fetching fines summary:', error);
+    }
+  };
+
+  // Build a flat list of fine entries so overdue and damage appear as independent list items
+  const filteredFinesRaw = fines.filter(fine =>
     fine.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     fine.memberEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
     fine.bookTitle.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Helper to calculate days overdue (hoisted function to avoid initialization timing issues)
+  function calculateDaysOverdue(dueDate: string) {
+    if (!dueDate) return 0;
+    const today = new Date().getTime();
+    const due = new Date(dueDate).getTime();
+    const diffTime = today - due;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  }
+
+  type FineEntry = {
+    id: string;
+    fineId: string;
+    type: 'overdue' | 'damage';
+    bookTitle: string;
+    bookAuthor: string;
+    memberName?: string;
+    memberEmail?: string;
+    amount: number;
+    damageDescription?: string;
+    dueDate?: string;
+    daysOverdue?: number;
+    status?: string;
+  };
+
+  const fineEntries: FineEntry[] = [];
+  filteredFinesRaw.forEach((f) => {
+    if (f.overdueFine > 0) {
+      fineEntries.push({
+        id: `${f.id}-overdue`,
+        fineId: f.id,
+        type: 'overdue',
+        bookTitle: f.bookTitle,
+        bookAuthor: f.bookAuthor,
+        memberName: f.memberName,
+        memberEmail: f.memberEmail,
+        amount: f.overdueFine,
+        dueDate: f.dueDate,
+        daysOverdue: calculateDaysOverdue(f.dueDate),
+        status: f.status
+      });
+    }
+    if (f.damageFine > 0 || (f.damageDescription && f.damageDescription.length > 0)) {
+      fineEntries.push({
+        id: `${f.id}-damage`,
+        fineId: f.id,
+        type: 'damage',
+        bookTitle: f.bookTitle,
+        bookAuthor: f.bookAuthor,
+        memberName: f.memberName,
+        memberEmail: f.memberEmail,
+        amount: f.damageFine || 0,
+        damageDescription: f.damageDescription,
+        status: f.status
+      });
+    }
+  });
 
   const totalPendingFines = fines
     .reduce((sum, fine) => sum + (fine.damageFine || 0) + (fine.overdueFine || 0), 0);
@@ -61,44 +155,54 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
   const handlePayDamage = async (fineId: string) => {
     try {
       const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-damage`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paid_by: user.id })
       });
-      
+
       if (response.ok) {
-        alert('Damage fine paid successfully!');
-        fetchFines();
+        const data = await response.json().catch(() => ({}));
+        alert(`Damage fine paid successfully! R${(data.paid_amount || 0).toFixed ? (data.paid_amount).toFixed(2) : data.paid_amount}`);
+        await fetchFines();
+        await fetchPaidFines();
+        await fetchFinesSummary();
       } else {
-        alert('Failed to pay damage fine');
+        const err = await response.text().catch(() => 'Unknown error');
+        console.error('Pay damage failed:', response.status, err);
+        alert(`Failed to pay damage fine: ${response.status} - ${err}`);
       }
     } catch (error) {
-      alert('Failed to pay damage fine');
+      console.error('Pay damage error:', error);
+      alert('Failed to pay damage fine (network error)');
     }
   };
 
   const handlePayOverdue = async (fineId: string) => {
     try {
       const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-overdue`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paid_by: user.id })
       });
-      
+
       if (response.ok) {
-        alert('Overdue fine paid successfully!');
-        fetchFines();
+        const data = await response.json().catch(() => ({}));
+        alert(`Overdue fine paid successfully! R${(data.paid_amount || 0).toFixed ? (data.paid_amount).toFixed(2) : data.paid_amount}`);
+        await fetchFines();
+        await fetchPaidFines();
+        await fetchFinesSummary();
       } else {
-        alert('Failed to pay overdue fine');
+        const err = await response.text().catch(() => 'Unknown error');
+        console.error('Pay overdue failed:', response.status, err);
+        alert(`Failed to pay overdue fine: ${response.status} - ${err}`);
       }
     } catch (error) {
-      alert('Failed to pay overdue fine');
+      console.error('Pay overdue error:', error);
+      alert('Failed to pay overdue fine (network error)');
     }
   };
 
-  const calculateDaysOverdue = (dueDate: string) => {
-    const today = new Date();
-    const due = new Date(dueDate);
-    const diffTime = today - due;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
+  // calculateDaysOverdue is declared above
 
   if (loading) {
     return <div className="p-4">Loading fines...</div>;
@@ -107,9 +211,7 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold text-foreground mb-2">
-          {user.role === 'admin' ? 'Fines Management' : 'My Fines'}
-        </h2>
+        <h2 className="text-3xl font-bold text-foreground mb-2">{user.role === 'admin' ? 'Fines Management' : 'My Fines'}</h2>
         <p className="text-muted-foreground">
           {user.role === 'admin' ? 'Manage library fines and penalties' : 'View and pay your library fines'}
         </p>
@@ -119,13 +221,13 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
       <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Fines</CardTitle>
+            <CardTitle className="text-sm font-medium">Overdue Fines</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">R{(totalPendingFines || 0).toFixed(2)}</div>
+            <div className="text-2xl font-bold text-red-600">R{(overdueTotal || 0).toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              {fines.filter(f => f.status === "issued").length} outstanding fines
+              {fines.filter(f => f.overdueFine > 0).length} overdue charges
             </p>
           </CardContent>
         </Card>
@@ -148,122 +250,101 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
         </CardContent>
       </Card>
 
+      
+
       {/* Fines List */}
       <Card>
         <CardHeader>
-          <CardTitle>All Fines ({filteredFines.length})</CardTitle>
+          <CardTitle>All Fines ({fineEntries.length})</CardTitle>
           <CardDescription>Complete list of library fines and their status</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {filteredFines.map((fine) => {
-              const daysOverdue = calculateDaysOverdue(fine.dueDate);
-              
-              return (
-                <div key={fine.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <h4 className="font-semibold">{fine.bookTitle}</h4>
-                        <p className="text-sm text-muted-foreground">by {fine.bookAuthor}</p>
-                        <div className="space-y-1">
-                          {fine.overdueFine > 0 && (
-                            <p className="text-sm font-medium text-orange-600">
-                              Overdue Fine: R{fine.overdueFine.toFixed(2)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {fine.damageDescription && (
-                      <div className="ml-8 mr-4 p-2 bg-red-50 border-l-4 border-r-4 border-red-200 rounded">
-                        <div className="flex items-center gap-2 text-red-700">
-                          <span className="font-medium">Damage Report:</span>
-                        </div>
-                        <p className="text-sm text-red-600 mt-1">{fine.damageDescription}</p>
-                        {fine.damageFine > 0 && (
-                          <p className="text-sm font-medium text-red-600 mt-1">
-                            Damage Fine: R{fine.damageFine.toFixed(2)}
-                          </p>
+            {fineEntries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <h4 className="font-semibold">{entry.bookTitle}</h4>
+                      <p className="text-sm text-muted-foreground">by {entry.bookAuthor}</p>
+                      <div className="space-y-1">
+                        {entry.type === 'overdue' && (
+                          <p className="text-sm font-medium text-orange-600">Overdue Fine: R{entry.amount.toFixed(2)}</p>
                         )}
                       </div>
-                    )}
-                    
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground ml-8">
-                      {user.role === 'admin' && (
-                        <div className="flex items-center gap-1">
-                          <User className="h-4 w-4" />
-                          <span>{fine.memberName} ({fine.memberEmail})</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>Due: {new Date(fine.dueDate).toLocaleDateString()}</span>
-                      </div>
-                      {daysOverdue > 0 && (
-                        <span className="text-red-600">
-                          {daysOverdue} days overdue
-                        </span>
-                      )}
-
                     </div>
                   </div>
-                  
-                  <div className="flex gap-2 flex-wrap">
+
+                  {entry.type === 'damage' && (
+                    <div className="ml-8 mr-4 p-2 bg-red-50 border-l-4 border-r-4 border-red-200 rounded">
+                      <div className="flex items-center gap-2 text-red-700"><span className="font-medium">Damage Report:</span></div>
+                      <p className="text-sm text-red-600 mt-1">{entry.damageDescription}</p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-sm font-medium text-red-600">Damage Fine: R{entry.amount.toFixed(2)}</p>
+                        {user.role === 'admin' && (
+                          <Button size="sm" onClick={() => handlePayDamage(entry.fineId)} className="bg-red-600 hover:bg-red-700">Pay Damage</Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground ml-8">
                     {user.role === 'admin' && (
-                      <>
-                        {fine.damageFine > 0 && (
-                          <Button 
-                            size="sm"
-                            onClick={() => handlePayDamage(fine.id)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Pay Damage
-                          </Button>
-                        )}
-                        {fine.overdueFine > 0 && (
-                          <Button 
-                            size="sm"
-                            onClick={() => handlePayOverdue(fine.id)}
-                            className="bg-orange-600 hover:bg-orange-700"
-                          >
-                            Pay Overdue (R{fine.overdueFine.toFixed(2)})
-                          </Button>
-                        )}
-                      </>
+                      <div className="flex items-center gap-1"><User className="h-4 w-4" /><span>{entry.memberName} ({entry.memberEmail})</span></div>
                     )}
-                    {user.role === 'user' && (fine.damageFine > 0 || fine.overdueFine > 0) && (
-                      <Button 
-                        size="sm"
-                        onClick={() => alert('The library only accepts cash payments')}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        Pay Fine
-                      </Button>
+                    {entry.dueDate && (
+                      <div className="flex items-center gap-1"><Calendar className="h-4 w-4" /><span>Due: {new Date(entry.dueDate || '').toLocaleDateString()}</span></div>
                     )}
-                    {fine.damageFine === 0 && fine.overdueFine === 0 && (
-                      <Button variant="outline" size="sm" disabled>
-                        All Paid
-                      </Button>
-                    )}
+                    {entry.daysOverdue && entry.daysOverdue > 0 && (<span className="text-red-600">{entry.daysOverdue} days overdue</span>)}
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="flex gap-2 flex-wrap">
+                  {entry.type === 'overdue' && user.role === 'admin' && (
+                    <Button size="sm" onClick={() => handlePayOverdue(entry.fineId)} className="bg-orange-600 hover:bg-orange-700">Pay Overdue (R{entry.amount.toFixed(2)})</Button>
+                  )}
+                  {entry.amount === 0 && (
+                    <Button variant="outline" size="sm" disabled>All Paid</Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-          
-          {filteredFines.length === 0 && fines.length > 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No fines match your search.</p>
-            </div>
+
+          {fineEntries.length === 0 && fines.length > 0 && (
+            <div className="text-center py-8"><p className="text-muted-foreground">No fines match your search.</p></div>
           )}
-          
+
           {fines.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No fines found.</p>
-            </div>
+            <div className="text-center py-8"><p className="text-muted-foreground">No fines found.</p></div>
           )}
+        </CardContent>
+      </Card>
+      {/* Paid Fines History (moved to bottom) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Paid Fines ({paidFines.length})</CardTitle>
+          <CardDescription>History of fines that have been paid</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {paidFines.length > 0 ? (
+              paidFines.map((p) => (
+                <div key={p.paymentId} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <h4 className="font-semibold">{p.bookTitle}</h4>
+                    <p className="text-sm text-muted-foreground">{p.username || ''} — {p.email || ''}</p>
+                    <div className="text-sm text-muted-foreground">Type: {p.type} — R{(p.amount || 0).toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground">Paid at: {p.paidAt}</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">No paid fines yet</p>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
