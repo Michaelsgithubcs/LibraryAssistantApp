@@ -993,19 +993,20 @@ def get_fines_count():
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
     
-    # Get total fine amounts plus overdue fines
+    # Get total fine amounts plus overdue fines.
+    # Note: damage fines (fine_amount) can exist on returned records too, so sum them across all rows.
+    # Overdue fines are calculated only for issued rows where the due_date is past and overdue fee per day > 0.
     cursor.execute('''
-        SELECT 
-            COALESCE(SUM(bi.fine_amount), 0) as damage_total,
+        SELECT
+            COALESCE(SUM(CASE WHEN bi.fine_amount IS NOT NULL THEN bi.fine_amount ELSE 0 END), 0) as damage_total,
             COALESCE(SUM(
-                CASE 
-                    WHEN bi.status = 'issued' AND bi.due_date < date('now') 
+                CASE
+                    WHEN bi.status = 'issued' AND bi.due_date < date('now') AND COALESCE(bi.overdue_fee_per_day, 0) > 0
                     THEN (julianday('now') - julianday(bi.due_date)) * bi.overdue_fee_per_day
-                    ELSE 0 
+                    ELSE 0
                 END
             ), 0) as overdue_total
         FROM book_issues bi
-        WHERE bi.status = 'issued'
     ''')
     result = cursor.fetchone()
     total_amount = float(result[0] or 0) + float(result[1] or 0)
