@@ -34,15 +34,18 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
   const [fines, setFines] = useState<Fine[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [paidFines, setPaidFines] = useState<any[]>([]);
 
   useEffect(() => {
     fetchFines();
+    fetchPaidFines();
   }, []);
 
   // Refresh when screen/tab is focused
   useFocusEffect(
     React.useCallback(() => {
       fetchFines();
+      fetchPaidFines();
     }, [])
   );
 
@@ -66,7 +69,24 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchFines();
+    await fetchPaidFines();
     setRefreshing(false);
+  };
+
+  const fetchPaidFines = async () => {
+    try {
+      const endpoint = user.role === 'admin'
+        ? 'https://libraryassistantapp.onrender.com/api/admin/fines/paid'
+        : `https://libraryassistantapp.onrender.com/api/user/${user.id}/fines/paid`;
+
+      const response = await fetch(endpoint);
+      if (response.ok) {
+        const data = await response.json();
+        setPaidFines(data);
+      }
+    } catch (error) {
+      console.error('Error fetching paid fines:', error);
+    }
   };
 
   const filteredFines = fines.filter(fine =>
@@ -299,6 +319,24 @@ export const FinesScreen: React.FC<FinesScreenProps> = ({ user, navigation }) =>
             </View>
           )}
         </Card>
+          {/* Paid Fines History - user's paid fines at the bottom */}
+          <Card>
+            <Text style={commonStyles.subtitle}>Paid Fines ({paidFines.length})</Text>
+            <Text style={commonStyles.textSecondary}>History of fines you have paid</Text>
+            {paidFines.length > 0 ? (
+              paidFines.map((p) => (
+                <View key={p.paymentId} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                  <Text style={commonStyles.subtitle}>{p.bookTitle}</Text>
+                  <Text style={commonStyles.textSecondary}>{p.type} — R{(p.amount || 0).toFixed(2)}</Text>
+                  <Text style={commonStyles.textMuted}>Paid at: {p.paidAt}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={commonStyles.textSecondary}>No paid fines yet</Text>
+              </View>
+            )}
+          </Card>
       </ScrollView>
     </View>
   );
