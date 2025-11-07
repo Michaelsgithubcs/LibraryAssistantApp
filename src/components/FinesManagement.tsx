@@ -154,15 +154,36 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
 
   const handlePayDamage = async (fineId: string) => {
     try {
+      // Ask admin how much to pay (allow partial payments). Leave blank to pay full outstanding.
+      let amountInput: string | null = null;
+      try {
+        amountInput = window.prompt('Enter amount to pay (leave blank to pay full):');
+      } catch (e) {
+        // In environments without prompt, default to full
+        amountInput = null;
+      }
+
+      let body: any = { paid_by: user.id };
+      if (amountInput !== null && amountInput !== '') {
+        const parsed = parseFloat(amountInput.replace(/,/g, '.'));
+        if (isNaN(parsed) || parsed <= 0) {
+          alert('Invalid payment amount');
+          return;
+        }
+        body.amount = parsed;
+      }
+
       const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-damage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paid_by: user.id })
+        body: JSON.stringify(body)
       });
 
       if (response.ok) {
-        const data = await response.json().catch(() => ({}));
-        alert(`Damage fine paid successfully! R${(data.paid_amount || 0).toFixed ? (data.paid_amount).toFixed(2) : data.paid_amount}`);
+  const data = await response.json().catch(() => ({}));
+  const paid = (data.paid_amount || 0);
+  const remaining = (data.remaining || 0);
+  alert(`Recorded payment R${paid.toFixed(2)}. Remaining: R${remaining.toFixed(2)}`);
         await fetchFines();
         await fetchPaidFines();
         await fetchFinesSummary();
@@ -179,15 +200,35 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
 
   const handlePayOverdue = async (fineId: string) => {
     try {
+      // Ask admin how much to pay (allow partial payments). Leave blank to pay full outstanding.
+      let amountInput: string | null = null;
+      try {
+        amountInput = window.prompt('Enter amount to pay for overdue (leave blank to pay full):');
+      } catch (e) {
+        amountInput = null;
+      }
+
+      let body: any = { paid_by: user.id };
+      if (amountInput !== null && amountInput !== '') {
+        const parsed = parseFloat(amountInput.replace(/,/g, '.'));
+        if (isNaN(parsed) || parsed <= 0) {
+          alert('Invalid payment amount');
+          return;
+        }
+        body.amount = parsed;
+      }
+
       const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-overdue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paid_by: user.id })
+        body: JSON.stringify(body)
       });
 
       if (response.ok) {
-        const data = await response.json().catch(() => ({}));
-        alert(`Overdue fine paid successfully! R${(data.paid_amount || 0).toFixed ? (data.paid_amount).toFixed(2) : data.paid_amount}`);
+  const data = await response.json().catch(() => ({}));
+  const paid = (data.paid_amount || 0);
+  const remaining = (data.remaining || 0);
+  alert(`Recorded payment R${paid.toFixed(2)}. Remaining: R${remaining.toFixed(2)}`);
         await fetchFines();
         await fetchPaidFines();
         await fetchFinesSummary();

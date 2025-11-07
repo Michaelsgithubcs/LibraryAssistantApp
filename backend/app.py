@@ -1023,9 +1023,14 @@ def get_fines_count():
         FROM book_issues bi
     ''')
     result = cursor.fetchone()
-    total_amount = float(result[0] or 0) + float(result[1] or 0)
     damage_total = float(result[0] or 0)
     overdue_total = float(result[1] or 0)
+
+    # Subtract any recorded overdue payments from the overdue total so remaining reflects payments made
+    cursor.execute("SELECT COALESCE(SUM(amount),0) FROM fine_payments WHERE payment_type = 'overdue'")
+    paid_overdue_total = float(cursor.fetchone()[0] or 0)
+    overdue_total = max(0.0, overdue_total - paid_overdue_total)
+    total_amount = damage_total + overdue_total
     conn.close()
     return jsonify({
         'amount': damage_total + overdue_total,
@@ -1069,6 +1074,10 @@ def get_all_fines():
             if today > due_date:
                 days_overdue = (today - due_date).days
                 overdue_fine = days_overdue * float(fine[10] or 5.00)
+                # subtract any overdue payments already made for this fine
+                cursor.execute('SELECT COALESCE(SUM(amount),0) FROM fine_payments WHERE fine_id = ? AND payment_type = "overdue"', (fine[0],))
+                paid_overdue = float(cursor.fetchone()[0] or 0)
+                overdue_fine = max(0.0, overdue_fine - paid_overdue)
         
         fine_list.append({
             'id': fine[0],
@@ -1076,6 +1085,7 @@ def get_all_fines():
             'memberEmail': fine[2],
             'bookTitle': fine[3],
             'bookAuthor': fine[4],
+            # damageFine should reflect any remaining damage amount stored in bi.fine_amount
             'damageFine': float(fine[5]) if fine[5] else 0,
             'overdueFine': overdue_fine,
             'damageDescription': fine[6] or '',
@@ -1172,6 +1182,10 @@ def get_user_fines(user_id):
             if today > due_date:
                 days_overdue = (today - due_date).days
                 overdue_fine = days_overdue * float(fine[10] or 5.00)
+                # subtract any overdue payments already made for this fine
+                cursor.execute('SELECT COALESCE(SUM(amount),0) FROM fine_payments WHERE fine_id = ? AND payment_type = "overdue"', (fine[0],))
+                paid_overdue = float(cursor.fetchone()[0] or 0)
+                overdue_fine = max(0.0, overdue_fine - paid_overdue)
         
         fine_list.append({
             'id': fine[0],
@@ -1270,22 +1284,32 @@ def pay_damage_fine(fine_id):
     if not row:
         conn.close()
         return jsonify({'error': 'Fine not found'}), 404
-
-    fine_amount = float(row[0] or 0)
+    current_fine_amount = float(row[0] or 0)
     paid_by = request.json.get('paid_by') if request.json else None
+    requested_amount = None
+    if request.json:
+        try:
+            requested_amount = float(request.json.get('amount')) if request.json.get('amount') is not None else None
+        except Exception:
+            requested_amount = None
 
-    if fine_amount > 0:
-        # Record payment
+    # If no amount specified, default to full outstanding fine
+    amount_to_pay = current_fine_amount if requested_amount is None else min(requested_amount, current_fine_amount)
+
+    paid_amount = 0.0
+    if amount_to_pay and amount_to_pay > 0:
+        paid_amount = round(amount_to_pay, 2)
         cursor.execute('INSERT INTO fine_payments (fine_id, payment_type, amount, paid_by) VALUES (?, ?, ?, ?)',
-                       (fine_id, 'damage', fine_amount, paid_by))
+                       (fine_id, 'damage', paid_amount, paid_by))
 
-    # Mark as paid
-    cursor.execute('UPDATE book_issues SET fine_amount = 0 WHERE id = ?', (fine_id,))
+        # reduce outstanding fine_amount on the issue row
+        remaining = max(0.0, current_fine_amount - paid_amount)
+        cursor.execute('UPDATE book_issues SET fine_amount = ? WHERE id = ?', (remaining, fine_id))
 
     conn.commit()
     conn.close()
 
-    return jsonify({'message': 'Damage fine paid successfully', 'paid_amount': fine_amount})
+    return jsonify({'message': 'Damage payment recorded', 'paid_amount': paid_amount, 'remaining': max(0.0, current_fine_amount - paid_amount)})
 
 @app.route('/api/admin/fines/<int:fine_id>/pay-overdue', methods=['POST'])
 def pay_overdue_fine(fine_id):
@@ -1313,17 +1337,29 @@ def pay_overdue_fine(fine_id):
             days_overdue = (today - due).days
             overdue_amount = days_overdue * overdue_fee_per_day
 
-    if overdue_amount > 0:
-        cursor.execute('INSERT INTO fine_payments (fine_id, payment_type, amount, paid_by) VALUES (?, ?, ?, ?)',
-                       (fine_id, 'overdue', overdue_amount, paid_by))
+    # Determine requested amount (for partial payments)
+    requested_amount = None
+    if request.json:
+        try:
+            requested_amount = float(request.json.get('amount')) if request.json.get('amount') is not None else None
+        except Exception:
+            requested_amount = None
 
-    # Zero out overdue fee per day so it no longer accrues
-    cursor.execute('UPDATE book_issues SET overdue_fee_per_day = 0 WHERE id = ?', (fine_id,))
+    amount_to_pay = overdue_amount if requested_amount is None else min(requested_amount, overdue_amount)
+    paid_amount = 0.0
+    if amount_to_pay and amount_to_pay > 0:
+        paid_amount = round(amount_to_pay, 2)
+        cursor.execute('INSERT INTO fine_payments (fine_id, payment_type, amount, paid_by) VALUES (?, ?, ?, ?)',
+                       (fine_id, 'overdue', paid_amount, paid_by))
+
+    # If fully paid, zero out overdue_fee_per_day so it no longer accrues; otherwise leave accrual running
+    if paid_amount >= overdue_amount and overdue_amount > 0:
+        cursor.execute('UPDATE book_issues SET overdue_fee_per_day = 0 WHERE id = ?', (fine_id,))
 
     conn.commit()
     conn.close()
 
-    return jsonify({'message': 'Overdue fine paid successfully', 'paid_amount': overdue_amount})
+    return jsonify({'message': 'Overdue payment recorded', 'paid_amount': paid_amount, 'remaining': max(0.0, overdue_amount - paid_amount)})
 
 @app.route('/api/user/<int:user_id>/issued-books', methods=['GET'])
 def get_user_issued_books(user_id):
