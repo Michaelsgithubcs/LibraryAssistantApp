@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors } from '../styles/colors';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 
@@ -38,7 +39,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   badge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.success,
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 20,
