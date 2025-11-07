@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Search, User, Calendar, Clock } from "lucide-react";
 
 interface Fine {
@@ -29,6 +30,10 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
   const [paidFines, setPaidFines] = useState<any[]>([]);
   const [overdueTotal, setOverdueTotal] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentFineId, setPaymentFineId] = useState<string | null>(null);
+  const [paymentFineType, setPaymentFineType] = useState<'damage' | 'overdue' | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
   
   useEffect(() => {
     fetchFines();
@@ -153,64 +158,27 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
     .reduce((sum, fine) => sum + (fine.damageFine || 0) + (fine.overdueFine || 0), 0);
 
   const handlePayDamage = async (fineId: string) => {
-    try {
-      // Ask admin how much to pay (allow partial payments). Leave blank to pay full outstanding.
-      let amountInput: string | null = null;
-      try {
-        amountInput = window.prompt('Enter amount to pay (leave blank to pay full):');
-      } catch (e) {
-        // In environments without prompt, default to full
-        amountInput = null;
-      }
-
-      let body: any = { paid_by: user.id };
-      if (amountInput !== null && amountInput !== '') {
-        const parsed = parseFloat(amountInput.replace(/,/g, '.'));
-        if (isNaN(parsed) || parsed <= 0) {
-          alert('Invalid payment amount');
-          return;
-        }
-        body.amount = parsed;
-      }
-
-      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-damage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      if (response.ok) {
-  const data = await response.json().catch(() => ({}));
-  const paid = (data.paid_amount || 0);
-  const remaining = (data.remaining || 0);
-  alert(`Recorded payment R${paid.toFixed(2)}. Remaining: R${remaining.toFixed(2)}`);
-        await fetchFines();
-        await fetchPaidFines();
-        await fetchFinesSummary();
-      } else {
-        const err = await response.text().catch(() => 'Unknown error');
-        console.error('Pay damage failed:', response.status, err);
-        alert(`Failed to pay damage fine: ${response.status} - ${err}`);
-      }
-    } catch (error) {
-      console.error('Pay damage error:', error);
-      alert('Failed to pay damage fine (network error)');
-    }
+    // Open payment dialog pre-filled for damage
+    setPaymentFineId(fineId);
+    setPaymentFineType('damage');
+    setPaymentAmount('');
+    setShowPaymentDialog(true);
   };
 
   const handlePayOverdue = async (fineId: string) => {
-    try {
-      // Ask admin how much to pay (allow partial payments). Leave blank to pay full outstanding.
-      let amountInput: string | null = null;
-      try {
-        amountInput = window.prompt('Enter amount to pay for overdue (leave blank to pay full):');
-      } catch (e) {
-        amountInput = null;
-      }
+    // Open payment dialog pre-filled for overdue
+    setPaymentFineId(fineId);
+    setPaymentFineType('overdue');
+    setPaymentAmount('');
+    setShowPaymentDialog(true);
+  };
 
-      let body: any = { paid_by: user.id };
-      if (amountInput !== null && amountInput !== '') {
-        const parsed = parseFloat(amountInput.replace(/,/g, '.'));
+  const submitPayment = async () => {
+    if (!paymentFineId || !paymentFineType) return;
+    try {
+      const body: any = { paid_by: user.id };
+      if (paymentAmount && paymentAmount.trim() !== '') {
+        const parsed = parseFloat(paymentAmount.replace(/,/g, '.'));
         if (isNaN(parsed) || parsed <= 0) {
           alert('Invalid payment amount');
           return;
@@ -218,28 +186,33 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
         body.amount = parsed;
       }
 
-      const response = await fetch(`https://libraryassistantapp.onrender.com/api/admin/fines/${fineId}/pay-overdue`, {
+      const endpoint = `https://libraryassistantapp.onrender.com/api/admin/fines/${paymentFineId}/${paymentFineType === 'damage' ? 'pay-damage' : 'pay-overdue'}`;
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
 
       if (response.ok) {
-  const data = await response.json().catch(() => ({}));
-  const paid = (data.paid_amount || 0);
-  const remaining = (data.remaining || 0);
-  alert(`Recorded payment R${paid.toFixed(2)}. Remaining: R${remaining.toFixed(2)}`);
+        const data = await response.json().catch(() => ({}));
+        const paid = (data.paid_amount || 0);
+        const remaining = (data.remaining || 0);
+        alert(`Recorded payment R${paid.toFixed(2)}. Remaining: R${remaining.toFixed(2)}`);
+        setShowPaymentDialog(false);
+        setPaymentFineId(null);
+        setPaymentFineType(null);
+        setPaymentAmount('');
         await fetchFines();
         await fetchPaidFines();
         await fetchFinesSummary();
       } else {
         const err = await response.text().catch(() => 'Unknown error');
-        console.error('Pay overdue failed:', response.status, err);
-        alert(`Failed to pay overdue fine: ${response.status} - ${err}`);
+        console.error('Payment failed:', response.status, err);
+        alert(`Failed to record payment: ${response.status} - ${err}`);
       }
     } catch (error) {
-      console.error('Pay overdue error:', error);
-      alert('Failed to pay overdue fine (network error)');
+      console.error('Payment error:', error);
+      alert('Failed to record payment (network error)');
     }
   };
 
@@ -290,6 +263,38 @@ export const FinesManagement = ({ user }: FinesManagementProps) => {
           />
         </CardContent>
       </Card>
+      {/* Payment Dialog (used for both damage and overdue) */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              {paymentFineType === 'damage' ? 'Pay damage fine' : 'Pay overdue fine'} — enter amount to record (leave blank to pay full)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Amount (ZAR)</label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Enter amount (e.g. 100.00)"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount((e as any).target.value)}
+                className="mt-2"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowPaymentDialog(false); setPaymentAmount(''); setPaymentFineId(null); setPaymentFineType(null); }}>
+                Cancel
+              </Button>
+              <Button onClick={submitPayment}>
+                Record Payment
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       
 
