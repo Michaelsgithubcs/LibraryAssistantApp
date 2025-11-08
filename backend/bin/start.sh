@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# If SERVICE_ACCOUNT_JSON env var is set, write it to a secure file and export
-if [ -n "${SERVICE_ACCOUNT_JSON:-}" ]; then
+# Check for service account JSON in multiple locations
+if [ -f "service_account.json" ]; then
+  echo "Using local service_account.json"
+  export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/service_account.json"
+elif [ -n "${SERVICE_ACCOUNT_JSON:-}" ]; then
   echo "Writing service account JSON to /tmp/service_account.json"
   printf "%s" "$SERVICE_ACCOUNT_JSON" > /tmp/service_account.json
   chmod 600 /tmp/service_account.json
