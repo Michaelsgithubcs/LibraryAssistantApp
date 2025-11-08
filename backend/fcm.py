@@ -32,6 +32,15 @@ def send_fcm_v1(device_token: str, title: str, body: str, data: Dict[str, Any] |
             'token': device_token,
             'notification': {'title': title, 'body': body},
             'data': {k: str(v) for k, v in (data or {}).items()},
+            'android': {
+                'priority': 'high',
+                'notification': {
+                    'channel_id': 'library-notifications',
+                    'priority': 'high',
+                    'default_vibrate_timings': True,
+                    'default_sound': True
+                }
+            }
         }
     }
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json; UTF-8'}

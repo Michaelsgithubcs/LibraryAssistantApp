@@ -76,15 +76,16 @@ class NotificationService {
         onNotification: (notification: any) => {
           console.log('NOTIFICATION RECEIVED:', notification);
 
-          // Check if this is a foreground FCM message (has data but no title/message)
-          const hasNotificationPayload = notification.title && notification.message;
+          // Check if this is a background notification (has notification payload from Android system)
+          const hasNotificationPayload = notification.title && notification.message && !notification.data;
           const hasDataPayload = notification.data && (notification.data.title || notification.data.body);
 
           let notificationData;
 
           if (hasNotificationPayload) {
-            // This came from FCM notification payload (background/closed app)
-            console.log('Background notification received');
+            // This is a background notification shown by Android system
+            // Just process the data for in-app handling
+            console.log('Background notification received from Android system');
             notificationData = {
               title: notification.title,
               message: notification.message,
@@ -109,6 +110,14 @@ class NotificationService {
               message: notification.message || notification.data?.body || notification.data?.message || '',
               data: notification.data || {}
             };
+
+            // If it has a title/message but no data, treat as background notification
+            if (notification.title && notification.message && !hasDataPayload) {
+              // Background notification - don't show local
+            } else {
+              // Show local notification as fallback
+              this.showLocalNotification(notificationData);
+            }
           }
 
           // Call notification handlers for in-app processing

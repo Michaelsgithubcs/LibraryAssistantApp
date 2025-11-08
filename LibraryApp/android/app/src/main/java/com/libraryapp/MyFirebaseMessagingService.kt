@@ -33,7 +33,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // Check if message contains a notification payload.
         remoteMessage.notification?.let {
             Log.d(TAG, "Message Notification Body: ${it.body}")
-            showNotification(it.title ?: "Library Notification", it.body ?: "")
+            // For notification payloads, Android automatically shows the notification
+            // We don't need to call showNotification here as it would duplicate
+            Log.d(TAG, "Notification payload received - Android will show notification automatically")
         }
     }
 
