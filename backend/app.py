@@ -1800,7 +1800,7 @@ def get_reservation_requests():
     return jsonify(request_list)
 
 @app.route('/api/admin/reservation-requests/<int:request_id>/approve', methods=['POST'])
-def approve_reservation(request_id):
+def approve_reservation_request(request_id):
     data = request.json
     admin_id = data.get('admin_id', 1)
     
@@ -1882,7 +1882,7 @@ def approve_reservation(request_id):
         conn.close()
 
 @app.route('/api/admin/reservation-requests/<int:request_id>/reject', methods=['POST'])
-def reject_reservation(request_id):
+def reject_reservation_request(request_id):
     data = request.json
     reason = data.get('reason', 'No reason provided')
     
