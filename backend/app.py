@@ -1004,6 +1004,17 @@ def issue_book(book_id):
     
     conn.commit()
     
+    # Send push notification to user about book issuance
+    book_title = book[0] if book else "Book"
+    notification_title = "📚 Book Issued Successfully!"
+    notification_message = f"'{book_title}' has been issued to you. Due date: {due_date.strftime('%Y-%m-%d')}"
+    send_push_to_user(user_id, notification_title, notification_message, {
+        'type': 'book_issued',
+        'book_id': book_id,
+        'issue_id': issue_id,
+        'due_date': due_date.strftime('%Y-%m-%d')
+    })
+    
     # Return the issued book details
     issued_book = {
         'id': issue_id,
@@ -1076,6 +1087,19 @@ def return_book(issue_id):
         ''', (book_id, user_id))
         
         conn.commit()
+        
+        # Send push notification to user about book return
+        cursor.execute('SELECT title FROM books WHERE id = ?', (book_id,))
+        book_title_result = cursor.fetchone()
+        book_title = book_title_result[0] if book_title_result else "Book"
+        
+        notification_title = "📖 Book Returned Successfully!"
+        notification_message = f"'{book_title}' has been marked as returned. Thank you for using our library!"
+        send_push_to_user(user_id, notification_title, notification_message, {
+            'type': 'book_returned',
+            'book_id': book_id,
+            'issue_id': issue_id
+        })
     
     conn.close()
     return jsonify({'message': 'Book returned successfully'})
