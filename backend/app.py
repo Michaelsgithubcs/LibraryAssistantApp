@@ -684,7 +684,7 @@ def reserve_book(book_id):
         print(f'Reserve error: {e}')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/reservations/<int:reservation_id>/approve', methods=['POST'])
+@app.route('/api/admin/reservations/<int:reservation_id>/approve', methods=['POST'], endpoint='approve_reservation_legacy')
 def approve_reservation(reservation_id):
     data = request.json
     approved_by = data.get('approved_by')  # Admin user ID
@@ -733,7 +733,7 @@ def approve_reservation(reservation_id):
         conn.close()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/admin/reservations/<int:reservation_id>/reject', methods=['POST'])
+@app.route('/api/admin/reservations/<int:reservation_id>/reject', methods=['POST'], endpoint='reject_reservation_legacy')
 def reject_reservation(reservation_id):
     data = request.json
     approved_by = data.get('approved_by')  # Admin user ID
@@ -1799,7 +1799,7 @@ def get_reservation_requests():
     conn.close()
     return jsonify(request_list)
 
-@app.route('/api/admin/reservation-requests/<int:request_id>/approve', methods=['POST'])
+@app.route('/api/admin/reservation-requests/<int:request_id>/approve', methods=['POST'], endpoint='approve_reservation_request')
 def approve_reservation_request(request_id):
     data = request.json
     admin_id = data.get('admin_id', 1)
@@ -1881,7 +1881,7 @@ def approve_reservation_request(request_id):
     finally:
         conn.close()
 
-@app.route('/api/admin/reservation-requests/<int:request_id>/reject', methods=['POST'])
+@app.route('/api/admin/reservation-requests/<int:request_id>/reject', methods=['POST'], endpoint='reject_reservation_request')
 def reject_reservation_request(request_id):
     data = request.json
     reason = data.get('reason', 'No reason provided')
