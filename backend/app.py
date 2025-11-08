@@ -660,12 +660,164 @@ def reserve_book(book_id):
         ''', (book_id, user_id))
         
         conn.commit()
+        
+        # Send notification to all admins about the new reservation request
+        cursor.execute('SELECT id FROM users WHERE role = "admin"')
+        admin_ids = [row[0] for row in cursor.fetchall()]
+        
+        book_title = book[0] if book else "Book"
+        admin_notification_title = "📖 New Reservation Request"
+        admin_notification_message = f"{user_id} has requested to reserve '{book_title}'"
+        
+        for admin_id in admin_ids:
+            send_push_to_user(admin_id, admin_notification_title, admin_notification_message, {
+                'type': 'reservation_request',
+                'book_id': book_id,
+                'user_id': user_id,
+                'book_title': book_title
+            })
+        
         conn.close()
         
         return jsonify({'message': 'Reservation request sent to admin for approval'})
     except Exception as e:
         print(f'Reserve error: {e}')
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/reservations/<int:reservation_id>/approve', methods=['POST'])
+def approve_reservation(reservation_id):
+    data = request.json
+    approved_by = data.get('approved_by')  # Admin user ID
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    try:
+        # Get reservation details
+        cursor.execute('''
+            SELECT br.book_id, br.user_id, b.title
+            FROM book_reservations br
+            JOIN books b ON br.book_id = b.id
+            WHERE br.id = ? AND br.status = 'pending'
+        ''', (reservation_id,))
+        reservation = cursor.fetchone()
+
+        if not reservation:
+            conn.close()
+            return jsonify({'error': 'Reservation not found or already processed'}), 404
+
+        book_id, user_id, book_title = reservation
+
+        # Update reservation status
+        cursor.execute('''
+            UPDATE book_reservations
+            SET status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = ?
+            WHERE id = ?
+        ''', (approved_by, reservation_id))
+
+        conn.commit()
+
+        # Send push notification to user
+        notification_title = "📚 Reservation Approved!"
+        notification_message = f"Your reservation for '{book_title}' has been approved. You can now issue this book."
+        send_push_to_user(user_id, notification_title, notification_message, {
+            'type': 'reservation_approved',
+            'book_id': book_id,
+            'reservation_id': reservation_id
+        })
+
+        conn.close()
+        return jsonify({'message': 'Reservation approved successfully'})
+
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/reservations/<int:reservation_id>/reject', methods=['POST'])
+def reject_reservation(reservation_id):
+    data = request.json
+    approved_by = data.get('approved_by')  # Admin user ID
+    rejection_reason = data.get('rejection_reason', '')
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    try:
+        # Get reservation details
+        cursor.execute('''
+            SELECT br.book_id, br.user_id, b.title
+            FROM book_reservations br
+            JOIN books b ON br.book_id = b.id
+            WHERE br.id = ? AND br.status = 'pending'
+        ''', (reservation_id,))
+        reservation = cursor.fetchone()
+
+        if not reservation:
+            conn.close()
+            return jsonify({'error': 'Reservation not found or already processed'}), 404
+
+        book_id, user_id, book_title = reservation
+
+        # Update reservation status
+        cursor.execute('''
+            UPDATE book_reservations
+            SET status = 'rejected', approved_at = CURRENT_TIMESTAMP, approved_by = ?, rejection_reason = ?
+            WHERE id = ?
+        ''', (approved_by, rejection_reason, reservation_id))
+
+        conn.commit()
+
+        # Send push notification to user
+        notification_title = "❌ Reservation Rejected"
+        notification_message = f"Your reservation for '{book_title}' has been rejected."
+        if rejection_reason:
+            notification_message += f" Reason: {rejection_reason}"
+        send_push_to_user(user_id, notification_title, notification_message, {
+            'type': 'reservation_rejected',
+            'book_id': book_id,
+            'reservation_id': reservation_id,
+            'rejection_reason': rejection_reason
+        })
+
+        conn.close()
+        return jsonify({'message': 'Reservation rejected successfully'})
+
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/reservations', methods=['GET'])
+def get_reservations():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT br.id, b.title as book_title, b.author as book_author,
+               u.username as user_name, u.email as user_email,
+               br.status, br.requested_at, br.approved_at, br.rejection_reason
+        FROM book_reservations br
+        JOIN books b ON br.book_id = b.id
+        JOIN users u ON br.user_id = u.id
+        ORDER BY br.requested_at DESC
+    ''')
+    reservations = cursor.fetchall()
+
+    reservation_list = []
+    for res in reservations:
+        reservation_list.append({
+            'id': res[0],
+            'book_title': res[1],
+            'book_author': res[2],
+            'user_name': res[3],
+            'user_email': res[4],
+            'status': res[5],
+            'requested_at': res[6],
+            'approved_at': res[7],
+            'rejection_reason': res[8] or ''
+        })
+
+    conn.close()
+    return jsonify(reservation_list)
 
 @app.route('/api/admin/books/<int:book_id>', methods=['PUT'])
 def edit_book(book_id):

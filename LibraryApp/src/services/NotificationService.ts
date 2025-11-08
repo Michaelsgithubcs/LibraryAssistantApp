@@ -74,23 +74,48 @@ class NotificationService {
         },
         // Called when a notification is received
         onNotification: (notification: any) => {
-          console.log('NOTIFICATION:', notification);
-          
-          // Always show a local notification for FCM messages (both foreground and background)
-          const notificationData = {
-            title: notification.title || notification.data?.title || 'Library Notification',
-            message: notification.message || notification.data?.body || notification.data?.message || '',
-            data: notification.data || {}
-          };
-          
-          // Show local notification
-          this.showLocalNotification(notificationData);
-          
-          // Call notification handlers
-          this.notificationHandlers.forEach(handler => 
+          console.log('NOTIFICATION RECEIVED:', notification);
+
+          // Check if this is a foreground FCM message (has data but no title/message)
+          const hasNotificationPayload = notification.title && notification.message;
+          const hasDataPayload = notification.data && (notification.data.title || notification.data.body);
+
+          let notificationData;
+
+          if (hasNotificationPayload) {
+            // This came from FCM notification payload (background/closed app)
+            console.log('Background notification received');
+            notificationData = {
+              title: notification.title,
+              message: notification.message,
+              data: notification.data || {}
+            };
+          } else if (hasDataPayload) {
+            // This came from FCM data payload (foreground app) - need to show local notification
+            console.log('Foreground notification received - showing local notification');
+            notificationData = {
+              title: notification.data.title || 'Library Notification',
+              message: notification.data.body || notification.data.message || '',
+              data: notification.data || {}
+            };
+
+            // Show local notification for foreground FCM messages
+            this.showLocalNotification(notificationData);
+          } else {
+            // Fallback
+            console.log('Unknown notification format');
+            notificationData = {
+              title: notification.title || notification.data?.title || 'Library Notification',
+              message: notification.message || notification.data?.body || notification.data?.message || '',
+              data: notification.data || {}
+            };
+          }
+
+          // Call notification handlers for in-app processing
+          this.notificationHandlers.forEach(handler =>
             handler(notificationData)
           );
-          
+
           // Required for iOS
           if (Platform.OS === 'ios') {
             notification.finish(PushNotificationIOS.FetchResult.NoData);
