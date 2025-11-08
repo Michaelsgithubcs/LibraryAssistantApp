@@ -76,13 +76,19 @@ class NotificationService {
         onNotification: (notification: any) => {
           console.log('NOTIFICATION:', notification);
           
+          // Always show a local notification for FCM messages (both foreground and background)
+          const notificationData = {
+            title: notification.title || notification.data?.title || 'Library Notification',
+            message: notification.message || notification.data?.body || notification.data?.message || '',
+            data: notification.data || {}
+          };
+          
+          // Show local notification
+          this.showLocalNotification(notificationData);
+          
           // Call notification handlers
           this.notificationHandlers.forEach(handler => 
-            handler({
-              title: notification.title || 'New Notification',
-              message: notification.message || '',
-              data: notification.data
-            })
+            handler(notificationData)
           );
           
           // Required for iOS
