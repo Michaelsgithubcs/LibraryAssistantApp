@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "strict": true,
+    "target": "esnext",
+    "types": ["react", "react-native"],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "commonjs",
+    "lib": ["es2017"],
+    "jsx": "react-native"
+  },
+  "exclude": ["node_modules"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/types/**/*.d.ts"
+  ],
+  "typeRoots": [
+    "./node_modules/@types",
+    "./src/types"
+  ]
+}

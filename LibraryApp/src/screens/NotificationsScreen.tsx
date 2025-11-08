@@ -1,0 +1,722 @@
+import React, { useState, useEffect } from 'react';
+import { useNotifications } from '../components/NotificationProvider';
+import { Notification } from '../store/slices/notificationSlice';
+import { useFocusEffect } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, StatusBar, TouchableOpacity } from 'react-native';
+import ReservationIcon from '../../assets/icons/notifications icons/reservation-notification.svg';
+import DueDateIcon from '../../assets/icons/notifications icons/duedate-notification.svg';
+import OverdueIcon from '../../assets/icons/notifications icons/overdue-notification.svg';
+import FineIcon from '../../assets/icons/notifications icons/fines-notifications.svg';
+import ReturnedIcon from '../../assets/icons/notifications icons/return-notification.svg';
+import NewBookIcon from '../../assets/icons/notifications icons/bookadded-notification.svg';
+import AllCaughtUpIcon from '../../assets/icons/notifications icons/allcoughtup.svg';
+import { ModernCard } from '../components/ModernCard';
+import { Button } from '../components/Button';
+import { colors } from '../styles/colors';
+import { SkeletonCircle, SkeletonLines, SkeletonBox } from '../components/Skeleton';
+import { commonStyles } from '../styles/common';
+import { User } from '../types';
+import { apiClient } from '../services/api';
+import { useDispatch } from 'react-redux';
+import { markAllAsRead, setUnreadCount } from '../store/slices/notificationSlice';
+
+interface NotificationsScreenProps {
+  user: User;
+  navigation: any;
+}
+
+// Using Notification interface from notificationSlice
+
+export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ user, navigation }) => {
+  const { notifications, markAsRead, setNotifications } = useNotifications();
+  const [refreshing, setRefreshing] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest'); // Default to newest first
+  const [isFetching, setIsFetching] = useState(false); // Prevent recursive fetches
+  const [isLoading, setIsLoading] = useState(true); // Show loading state initially
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    fetchNotifications();
+    
+    // Reduced polling to every 30 seconds to prevent conflicts with DashboardScreen (15s)
+    // This prevents the infinite glitch from fighting updates
+    const interval = setInterval(() => {
+      console.log('Auto-fetching notifications...');
+      fetchNotifications();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Explicitly fetch on screen focus to ensure latest notifications are shown immediately
+  useFocusEffect(
+    React.useCallback(() => {
+      // Small delay to avoid race with mark-all-read on focus
+      const t = setTimeout(() => {
+        fetchNotifications();
+      }, 300);
+      return () => clearTimeout(t);
+    }, [])
+  );
+
+  // Mark notifications as read when user views them (not automatically on screen focus)
+  // This allows the red dot to show for new notifications
+  // Users can manually mark all as read using pull-to-refresh
+  useFocusEffect(
+    React.useCallback(() => {
+      // Mark all notifications as read when screen is opened
+      const markAllRead = async () => {
+        const unreadNotifications = notifications.filter(n => !n.read);
+        if (unreadNotifications.length > 0) {
+          console.log(`Marking ${unreadNotifications.length} notifications as read`);
+          
+          // Mark as read in Redux immediately for instant UI update
+          dispatch(markAllAsRead());
+          // Clamp badge to 0 immediately to prevent flicker while backend catches up
+          dispatch(setUnreadCount(0));
+          
+          // Mark as read in backend database
+          const { notificationApi } = await import('../services/api');
+          for (const notification of unreadNotifications) {
+            // Only mark backend notifications (numeric IDs after removing 'db-' prefix)
+            if (notification.id.toString().startsWith('db-')) {
+              const dbId = parseInt(notification.id.toString().replace('db-', ''));
+              await notificationApi.markNotificationRead(dbId);
+            }
+          }
+        }
+      };
+      
+      markAllRead();
+    }, [notifications, dispatch])
+  );
+
+  // Reset badge count when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      // Import here to avoid circular dependency
+      const NotificationService = require('../services/NotificationService').default;
+      
+      // Reset badge count on app icon
+      NotificationService.resetBadgeCount();
+      
+      console.log('NotificationsScreen focused - resetting badge count');
+      
+    }, [])
+  );
+
+  const fetchNotifications = async () => {
+    if (isFetching) {
+      console.log('Already fetching, skipping...');
+      return;
+    }
+    
+    setIsFetching(true);
+    try {
+      console.log('Fetching notifications data...');
+      
+      // First, load persisted notifications from backend database
+      const { notificationApi } = await import('../services/api');
+      const persistedNotifications = await notificationApi.getUserNotifications(user.id);
+      console.log(`Loaded ${persistedNotifications.length} persisted notifications from database`);
+      
+      // Convert backend notifications to app format
+      const backendNotifications: Notification[] = persistedNotifications.map((n: any) => ({
+        id: `db-${n.id}`,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        timestamp: n.created_at,
+        read: n.is_read === 1,
+        data: n.data ? JSON.parse(n.data) : {}
+      }));
+
+      // Update unread badge count from backend data immediately
+      const backendUnread = backendNotifications.filter(n => !n.read).length;
+      dispatch(setUnreadCount(backendUnread));
+      
+      const [reservations, myBooks, fines, books] = await Promise.all([
+        apiClient.getReservationStatus(user.id),
+        apiClient.getMyBooks(user.id),
+        apiClient.getMyFines(user.id),
+        apiClient.getBooks()
+      ]);
+
+      const notificationList: Notification[] = [...backendNotifications];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Reservation notifications - ONLY from Redux store (added when user makes reservation)
+      // Don't generate fake backend notifications for approved/rejected reservations
+      // Those should be handled by push notifications or backend webhooks
+
+      // Due date and overdue notifications
+      myBooks.forEach((book) => {
+        if (book.status === 'issued') {
+          const dueDate = new Date(book.due_date);
+          dueDate.setHours(0, 0, 0, 0);
+          const diffTime = dueDate.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays === 2) {
+            // Calculate when this notification should have been sent (2 days before due date)
+            const notificationDate = new Date(book.due_date);
+            notificationDate.setDate(notificationDate.getDate() - 2);
+            
+            const notification = {
+              id: `due-soon-2-${book.id}`,
+              type: 'due_soon',
+              title: 'Book Due in 2 Days',
+              message: `"${book.title}" is due in 2 days (${new Date(book.due_date).toLocaleDateString()}). Please return it on time to avoid fines.`,
+              timestamp: notificationDate.toISOString(),
+              // Synthetic reminders should not affect unread badge
+              read: true,
+              data: book
+            };
+            notificationList.push(notification);
+          } else if (diffDays === 1) {
+            // Calculate when this notification should have been sent (1 day before due date)
+            const notificationDate = new Date(book.due_date);
+            notificationDate.setDate(notificationDate.getDate() - 1);
+            
+            const notification = {
+              id: `due-soon-1-${book.id}`,
+              type: 'due_soon',
+              title: 'Book Due Tomorrow',
+              message: `"${book.title}" is due tomorrow (${new Date(book.due_date).toLocaleDateString()}). Please return it to avoid fines.`,
+              timestamp: notificationDate.toISOString(),
+              // Synthetic reminders should not affect unread badge
+              read: true,
+              data: book
+            };
+            notificationList.push(notification);
+          } else if (diffDays < 0) {
+            const daysOverdue = Math.abs(diffDays);
+            const fineAmount = daysOverdue * 5.00;
+            
+            const notification = {
+              id: `overdue-${book.id}`,
+              type: 'overdue',
+              title: 'Book Overdue!',
+              message: `"${book.title}" is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue. Fine: R${fineAmount.toFixed(2)}. Please return immediately.`,
+              timestamp: book.due_date || new Date().toISOString(),
+              // Synthetic reminders should not affect unread badge
+              read: true,
+              data: { ...book, daysOverdue, fineAmount }
+            };
+            notificationList.push(notification);
+          }
+        }
+      });
+
+      // Fine notifications
+      fines.forEach((fine) => {
+        if (fine.damageFine > 0 || fine.overdueFine > 0) {
+          const totalFine = fine.damageFine + fine.overdueFine;
+          const reason = fine.damageDescription ? 'Damage: ' + fine.damageDescription : 'Overdue fine';
+          const notification = {
+            id: `fine-${fine.id}`,
+            type: 'fine',
+            title: 'Outstanding Fine',
+            message: `You have an outstanding fine of R${totalFine.toFixed(2)} for "${fine.bookTitle}". ${reason}`,
+            timestamp: fine.dueDate || fine.issueDate || new Date().toISOString(),
+            // Synthetic reminders should not affect unread badge
+            read: true,
+            data: fine
+          };
+          notificationList.push(notification);
+        }
+      });
+      
+      // Book returned notifications - DON'T show these
+      // Returned books are history, not active notifications
+      
+      // New book notifications - REMOVED
+      // These were fake notifications showing random books
+      // Real new book notifications should come from backend when admin adds a book
+
+      // Merge notifications intelligently to prevent duplicates and glitching
+      // Strategy: Backend notifications are source of truth, but include Redux notifications
+      // that start with "db-" prefix (those came from backend) or recent ones (< 60 seconds old)
+      
+      // Create a Map to deduplicate by unique key (type + book/reservation info)
+      const notificationMap = new Map<string, Notification>();
+      
+      // Get Redux notifications that should be preserved:
+      // Only include very recent ones (< 5 seconds) that might not be in backend yet
+      // This reduces the window for duplicates while still catching in-flight notifications
+      const now = Date.now();
+      const recentReduxNotifications = notifications.filter(n => {
+        const notifTime = new Date(n.timestamp).getTime();
+        const ageInSeconds = (now - notifTime) / 1000;
+        // Only keep very recent non-backend notifications (reduced from 60s to 5s)
+        return !n.id.startsWith('db-') && ageInSeconds < 5;
+      });
+      
+      console.log(`Merging: ${backendNotifications.length} backend, ${recentReduxNotifications.length} recent Redux, ${notificationList.length} generated`);
+      
+      // Merge: backend + recent redux + newly generated
+      [...backendNotifications, ...recentReduxNotifications, ...notificationList].forEach(notif => {
+        // Use notification ID as unique key - this preserves ALL notifications from database
+        // Backend notifications have numeric IDs, Redux notifications have string IDs
+        let uniqueKey = notif.id?.toString() || `temp-${Date.now()}-${Math.random()}`;
+        
+        // Only deduplicate if it's a Redux notification without an ID (not yet saved to backend)
+        if (!notif.id || typeof notif.id === 'string') {
+          // For unsaved reservation notifications, prevent duplicate creation
+          if (notif.type === 'reservation' || notif.type === 'reservation_approved' || notif.type === 'reservation_rejected') {
+            const bookTitle = notif.data?.bookTitle || notif.message.match(/"([^"]+)"/)?.[1] || '';
+            const reservationId = notif.data?.reservationId || '';
+            uniqueKey = `temp-${notif.type}-${reservationId || bookTitle}`;
+          }
+          // For unsaved due/overdue notifications
+          else if (notif.type === 'due_soon' || notif.type === 'overdue') {
+            const bookId = notif.data?.id || notif.data?.book_id || '';
+            uniqueKey = `temp-${notif.type}-${bookId}`;
+          }
+          // For unsaved fine notifications
+          else if (notif.type === 'fine') {
+            const fineId = notif.data?.id || '';
+            uniqueKey = `temp-${notif.type}-${fineId}`;
+          }
+        }
+        
+        // Add to map - only deduplicate exact duplicates (same uniqueKey)
+        const existing = notificationMap.get(uniqueKey);
+        if (!existing) {
+          // New notification - add it
+          notificationMap.set(uniqueKey, notif);
+        } else {
+          // Duplicate found - prefer backend notification (numeric ID) over Redux (string ID)
+          const isNewFromBackend = typeof notif.id === 'number';
+          const isExistingFromBackend = typeof existing.id === 'number';
+          
+          if (isNewFromBackend && !isExistingFromBackend) {
+            // Backend notification replaces Redux notification
+            notificationMap.set(uniqueKey, notif);
+          }
+          // Otherwise keep existing (backend always wins, or keep first Redux if both Redux)
+        }
+      });
+      
+      // Convert back to array
+      const deduplicatedNotifications = Array.from(notificationMap.values());
+      
+      // Only update if notifications have actually changed
+      // Compare by count and IDs to prevent unnecessary updates that cause glitching
+      const currentIds = new Set(notifications.map(n => n.id).sort());
+      const newIds = new Set(deduplicatedNotifications.map(n => n.id).sort());
+      
+      const hasChanged = 
+        notifications.length !== deduplicatedNotifications.length ||
+        ![...currentIds].every(id => newIds.has(id));
+      
+      if (hasChanged) {
+        console.log(`Notifications changed: ${notifications.length} -> ${deduplicatedNotifications.length}`);
+        console.log(`Backend: ${backendNotifications.length}, Generated: ${notificationList.length}, Recent Redux: ${recentReduxNotifications.length}`);
+        console.log('Notification types:', deduplicatedNotifications.map(n => `${n.type}: ${n.title}`));
+        setNotifications(deduplicatedNotifications);
+        // Keep unread count sourced from backend only to avoid flicker from synthetic items
+      } else {
+        console.log('Notifications unchanged, skipping update');
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setIsFetching(false);
+      setIsLoading(false); // Done loading
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Import notification service
+      const NotificationService = require('../services/NotificationService').default;
+      
+      // Reset badge count
+      NotificationService.resetBadgeCount();
+      
+      // Fetch latest notifications
+      await fetchNotifications();
+      
+      // Mark all notifications as read
+      dispatch(markAllAsRead());
+      
+      console.log("Notifications refreshed and marked as read");
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+
+
+  const renderNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'reservation':
+      case 'reservation_approved':
+      case 'reservation_rejected':
+        return <ReservationIcon width={24} height={24} />;
+      case 'fine':
+        return <FineIcon width={24} height={24} />;
+      case 'overdue':
+        return <OverdueIcon width={24} height={24} />;
+      case 'due_soon':
+        return <DueDateIcon width={24} height={24} />;
+      case 'returned':
+        return <ReturnedIcon width={24} height={24} />;
+      case 'new_book':
+        return <NewBookIcon width={24} height={24} />;
+      default:
+        return <NewBookIcon width={24} height={24} />;
+    }
+  };
+
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case 'reservation': return colors.primary;
+      case 'reservation_approved': return colors.success;
+      case 'reservation_rejected': return colors.danger;
+      case 'fine': return colors.primary;
+      case 'overdue': return colors.danger;
+      case 'due_soon': return colors.warning;
+      case 'returned': return colors.success;
+      case 'new_book': return colors.primary;
+      default: return colors.text.secondary;
+    }
+  };
+  
+  const getActionText = (type: string) => {
+    switch (type) {
+      case 'reservation': return 'View Status';
+      case 'reservation_approved': return 'View Books';
+      case 'reservation_rejected': return 'View Details';
+      case 'fine': return 'Pay Fine';
+      case 'overdue': return 'View Books';
+      case 'due_soon': return 'View Books';
+      case 'returned': return 'View History';
+      case 'new_book': return 'Reserve Book';
+      default: return 'View Details';
+    }
+  };
+
+  const handleNotificationPress = (notification: Notification) => {
+    markAsRead(notification.id);
+    
+    switch (notification.type) {
+      case 'reservation':
+      case 'reservation_approved':
+      case 'reservation_rejected':
+      case 'overdue':
+      case 'due_soon':
+        navigation.navigate('BorrowedBooks');
+        break;
+      case 'fine':
+        navigation.navigate('Fines');
+        break;
+      case 'returned':
+        navigation.navigate('BorrowedBooks');
+        break;
+      case 'new_book':
+        navigation.navigate('MyBooks');
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Sort notifications based on sort order
+  const sortedNotifications = React.useMemo(() => {
+    console.log(`Sorting ${notifications.length} notifications by ${sortOrder}`);
+    
+    const sorted = [...notifications].sort((a, b) => {
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+      
+      if (sortOrder === 'newest') {
+        return dateB - dateA; // Newest first (descending)
+      } else {
+        return dateA - dateB; // Oldest first (ascending)
+      }
+    });
+    
+    // Debug log top 3 after sorting
+    sorted.slice(0, 3).forEach((n, i) => {
+      const date = new Date(n.timestamp);
+      console.log(`  ${i + 1}. ${n.title} (${n.type}) - ${date.toLocaleString()}`);
+    });
+    
+    return sorted;
+  }, [notifications, sortOrder]);
+
+  const toggleSortOrder = () => {
+    setSortOrder(prevOrder => {
+      const newOrder = prevOrder === 'newest' ? 'oldest' : 'newest';
+      console.log(`Sort order changed to: ${newOrder}`);
+      return newOrder;
+    });
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Notifications</Text>
+            <Text style={styles.headerSubtitle}>{notifications.length} notifications</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.sortButton}
+            onPress={toggleSortOrder}
+          >
+            <Text style={styles.sortButtonText}>
+              {sortOrder === 'newest' ? '↓ Newest' : '↑ Oldest'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {isLoading ? (
+          <View style={{ paddingHorizontal: 16 }}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <ModernCard key={idx} variant="elevated" style={styles.notificationCard}>
+                <View style={styles.notificationHeader}>
+                  <SkeletonCircle style={{ marginRight: 16 }} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonLines lines={1} lineHeight={16} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonLines lines={2} />
+                    <View style={{ height: 8 }} />
+                    <SkeletonBox width={100} height={10} />
+                  </View>
+                </View>
+                <SkeletonBox width={120} height={36} radius={18} />
+              </ModernCard>
+            ))}
+          </View>
+        ) : sortedNotifications.length > 0 ? (
+          sortedNotifications.map((notification) => (
+            <ModernCard 
+              key={notification.id} 
+              variant="elevated" 
+              style={{
+                ...styles.notificationCard,
+                ...(!notification.read && styles.unreadCard)
+              }}>
+                <View style={styles.notificationHeader}>
+                <View style={[
+                  styles.notificationIcon,
+                  { backgroundColor: getNotificationColor(notification.type) + '20' }
+                ]}>
+                  {renderNotificationIcon(notification.type)}
+                </View>
+                <View style={styles.notificationContent}>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.notificationTitle}>
+                      {notification.title}
+                    </Text>
+                    {!notification.read && (
+                      <View style={styles.unreadDot} />
+                    )}
+                  </View>
+                  <Text style={styles.notificationMessage}>
+                    {notification.message}
+                  </Text>
+                  <Text style={styles.notificationTime}>
+                    {new Date(notification.timestamp).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+              
+              <Button
+                title={getActionText(notification.type)}
+                onPress={() => handleNotificationPress(notification)}
+                variant="outline"
+                style={styles.viewButton}
+              />
+            </ModernCard>
+          ))
+        ) : (
+          <ModernCard variant="elevated">
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconContainer}>
+                <AllCaughtUpIcon width={64} height={64} />
+              </View>
+              <Text style={styles.emptyTitle}>All Caught Up!</Text>
+              <Text style={styles.emptyMessage}>
+                You have no new notifications. We'll notify you about reservations, due dates, fines, and new books.
+              </Text>
+            </View>
+          </ModernCard>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  
+  header: {
+    backgroundColor: colors.primary,
+    paddingTop: 50,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.text.inverse,
+    marginBottom: 4,
+  },
+  
+  headerSubtitle: {
+    fontSize: 16,
+    color: colors.text.inverse,
+    opacity: 0.8,
+  },
+  
+  sortButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  
+  sortButtonText: {
+    color: colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  
+  content: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  
+  notificationCard: {
+    marginBottom: 12,
+  },
+  
+
+  
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  
+  notificationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  
+  iconText: {
+    fontSize: 22,
+  },
+  
+  notificationContent: {
+    flex: 1,
+  },
+  
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  
+  notificationTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    flex: 1,
+  },
+  
+  notificationMessage: {
+    fontSize: 15,
+    color: colors.text.secondary,
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  
+  notificationTime: {
+    fontSize: 13,
+    color: colors.text.muted,
+    fontWeight: '500',
+  },
+  
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    marginLeft: 8,
+  },
+  
+  unreadCard: {
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
+  
+  viewButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIconContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 8,
+  },
+  
+  emptyMessage: {
+    fontSize: 16,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});

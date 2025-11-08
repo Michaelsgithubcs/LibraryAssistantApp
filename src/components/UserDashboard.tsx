@@ -1,0 +1,253 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+
+import { Progress } from "@/components/ui/progress";
+import { BookOpen, Clock, AlertTriangle, Calendar, ShoppingCart, MessageCircle, CreditCard, BookMarked } from "lucide-react";
+import { useState, useEffect } from "react";
+import { BookChatbot } from "./BookChatbot";
+
+interface UserDashboardProps {
+  user: { id: number; username: string; role: string };
+  activeTab?: string;
+}
+
+export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardProps) => {
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showChatbot, setShowChatbot] = useState(false);
+
+  const [userStats, setUserStats] = useState({
+    booksOverdue: 0,
+    totalFines: 0,
+    reservations: 0,
+  });
+
+
+
+  const [bookSuggestions, setBookSuggestions] = useState([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
+
+  useEffect(() => {
+    // Only fetch user stats, not suggestions
+    if (user.role === 'user') {
+      fetchUserStats();
+    }
+  }, []);
+
+  const fetchSuggestions = async () => {
+    try {
+      // First, try to fetch ML-powered recommendations for the user
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/recommendations/${user.id}?type=ml&limit=5`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.recommendations && data.recommendations.length > 0) {
+          // Format the ML recommendations for display
+          setBookSuggestions(data.recommendations.slice(0, 4).map(book => ({
+            id: book.id,
+            title: book.title,
+            author: book.author || 'Unknown',
+            category: book.category || 'General',
+            estimatedTime: book.reading_time_minutes || 30
+          })));
+          return;
+        }
+      }
+      
+      // If ML recommendations fail or are empty, fall back to regular books
+      try {
+        const booksResponse = await fetch('https://libraryassistantapp.onrender.com/api/books');
+        if (booksResponse.ok) {
+          const booksData = await booksResponse.json();
+          // Filter out books that the user might already have
+          const filteredBooks = booksData.filter(book => 
+            book.available_copies > 0 && 
+            book.total_copies > 0
+          );
+          
+          setBookSuggestions(filteredBooks.slice(0, 4).map(book => ({
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category || 'General',
+            estimatedTime: book.reading_time_minutes || 30
+          })));
+        }
+      } catch (fallbackError) {
+        console.error('Error fetching fallback suggestions:', fallbackError);
+      }
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+    }
+  };
+
+  const fetchUserStats = async () => {
+    try {
+      const [overdueRes, finesRes, reservationsRes] = await Promise.all([
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/overdue-books`),
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`),
+        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/reservations`)
+      ]);
+      
+      const overdueData = overdueRes.ok ? await overdueRes.json() : [];
+      const finesData = finesRes.ok ? await finesRes.json() : [];
+      const reservationsData = reservationsRes.ok ? await reservationsRes.json() : [];
+      
+      const totalFines = finesData.reduce((sum, fine) => sum + (fine.damageFine || 0) + (fine.overdueFine || 0), 0);
+      
+      setUserStats({
+        booksOverdue: overdueData.length,
+        totalFines: totalFines,
+        reservations: reservationsData.length
+      });
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+    }
+  };
+
+  const reserveBook = async (bookId) => {
+    try {
+      const response = await fetch(`https://libraryassistantapp.onrender.com/api/books/${bookId}/reserve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id })
+      });
+      
+      if (response.ok) {
+        alert('Book reserved successfully!');
+      } else {
+        alert('Failed to reserve book');
+      }
+    } catch (error) {
+      console.error('Reserve error:', error);
+      alert('Failed to reserve book');
+    }
+  };
+
+
+
+
+
+  const openBookChat = (book) => {
+    setSelectedBook(book);
+    setShowChatbot(true);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold text-foreground mb-2">My Library Dashboard</h2>
+        <p className="text-muted-foreground">Welcome back! Here's your library activity overview</p>
+      </div>
+
+      <div className="w-full">
+
+        <div className="space-y-6">
+          {/* Quick Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Overdue Books</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{userStats.booksOverdue}</div>
+                <p className="text-xs text-muted-foreground">Please return soon</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">My Fines</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">R{(userStats.totalFines || 0).toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">Outstanding amount</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Reservations</CardTitle>
+                <BookMarked className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{userStats.reservations}</div>
+                <p className="text-xs text-muted-foreground">Books on hold</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {user.role === 'user' && (
+            <>
+              {/* Book Suggestions */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Recommended for You</CardTitle>
+                    <CardDescription>Books you might enjoy based on your reading history</CardDescription>
+                  </div>
+                  <div 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (recommendationsLoaded) {
+                        fetchSuggestions();
+                      }
+                    }}
+                    className={`p-2 rounded-full cursor-pointer ${recommendationsLoaded ? 'hover:bg-gray-100 dark:hover:bg-gray-800' : 'text-gray-300 cursor-not-allowed'}`}
+                    title={recommendationsLoaded ? "Refresh recommendations" : "Load recommendations first"}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" stroke-width="1.5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21.8883 13.5C21.1645 18.3113 17.013 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C16.1004 2 19.6096 4.64203 21.1707 8.31732" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                      <path d="M17 8H21.4C21.7314 8 22 7.73137 22 7.4V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!recommendationsLoaded ? (
+                    <div className="flex flex-col items-center justify-center p-6">
+                      <p className="text-center text-muted-foreground mb-4">
+                        Click the button to load personalized book recommendations
+                      </p>
+                      <Button 
+                        onClick={() => {
+                          fetchSuggestions();
+                          setRecommendationsLoaded(true);
+                        }}
+                      >
+                        Load Recommendations
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {bookSuggestions.map((book) => (
+                        <div key={book.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h4 className="font-semibold">{book.title}</h4>
+                            <p className="text-sm text-muted-foreground">{book.author}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold text-foreground">{book.category}</div>
+                              <span className="text-xs text-muted-foreground">{book.estimatedTime}min</span>
+                            </div>
+                          </div>
+                          <Button size="sm" onClick={() => reserveBook(book.id)}>Reserve</Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      </div>
+
+      {showChatbot && selectedBook && (
+        <BookChatbot 
+          book={selectedBook} 
+          onClose={() => setShowChatbot(false)} 
+        />
+      )}
+    </div>
+  );
+};
