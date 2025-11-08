@@ -7,10 +7,25 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: python backend/app.py
+    startCommand: bash backend/bin/start.sh
     envVars:
       - key: DATABASE_PATH
         value: /var/data/library.db
+      - key: SERVICE_ACCOUNT_JSON
+        value: |
+          {
+            "type": "service_account",
+            "project_id": "librant-e3990",
+            "private_key_id": "45f021baa4e41866d404ff984971f3bc8ec35d0b",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDHVGV82EtlRSsM\nOE7bJSrRn7lj1ibir2m06bocfvpnzlMvT3uoMcTvQTYQa+dgUsmqw4rSbZxj/xp4\nAlwJFs1Rh4EWBAWIyy/dG3lYVESYntZiDutUTfULp3nhf5Hb0HIn4uSDbHqc9wvE\ncxQHNe2vFobvJmlmhnfayTU0oPenFx9XOFwRQdxA0KTMJpaCqnQTowVC9krcbCN0\nnfybIwnagvxMI8ORXoMfZVOWEGuhYJ6UnuMop4IhfX+IXZAcsKBEYd3LzsLyU++f\nyz3X0WlvlqKoODyVU64t0+BOfzXF7B34sIU00ZHLBTeu3aBQ2LfDGk1b3s/1829G\nlCis07AtAgMBAAECggEAJb/WfofJ85JfXi+Vw4vs6Ykpx34JnDmjN8dh3z6u9pTN\nDTMs1IQkazk6325IAeZ72dKxijuG+CsaXKr5uiDu3mdeq4g0ch0k4edvmipPWWYP\nbL+tkqg25a+gdfO+cFYwIFyocTlMmUhyGpC+tMTiUBvgjw8DvA5wSWd8o4xuil6R\nLQfL82aL/MvzpK8vockqrgwO3FB0AtLKQBCa2TLtwKvXdyPbLnAh5S7p9OvBXZv7\nPn/FQehUmK6gxU7EpoCJSNBifxotGTUO05flsd4GtYGkG93AVOSN7huQX8tWuBxf\n2Lo18hegQoYdQtUbECdci9vk0sAdLc6/sx/HTdIKkQKBgQD5h5SOicKnBYJP0wOX\niqwAkjg66fAeYudE4LEr57rtzzdf5lbDs9kr0GiDrJwJJDecYSd/47y+P8sHjEQ8\nKY9LPtJHZR9LW2MUbPLCi7hWSmBsKQTFrQluOpE8GwwBnY0gdaBsVEnqYGSFnatj\nOAJqF1i2LGR/EEBEXwhf2sGn9QKBgQDMf5SaEtYLvD2Vtyr4wshurLTPED0avavp\nuqyOfstVAtt8KNge3thC2fBR+QiBMYxeAgaETvXKKXiac8KTYSfqjaCY+sl+OSlP\nGn3ysiany+d11tqvmvnH7y/SDjnXq+6pauNTJlEMspLr/HWi6X3a11xim1KCXDAG\n8hN5ayucWQKBgQC9QuSeqEaHwFnyia5zxq5nUIBtzvpdUc7wIyy+jGjv7velOWQd\n08+ot85N8SH4nQvBBL+c9PM3qdMoym8G4s7Y17FOjZiK46nm2CvY+3i5mnhAEWyZ\nMoGwpaN631jf8MwWDqG7CMN3jd0wq0JPYzARn9udcVZYOc9FDH+hlJ7F8QKBgCz0\ncu936pQD2qn57TloYHVsBAds83HYdl1YSyy8FOjoSuW9eN04ceQoUttCWqtEAC5+\nVX5qeT/q4/dYMVMCzaqTXdWjc/4KhNk94qgin7rNaWGPTN3DvNtF6oZL2E1gH4Qg\n2j5iMvkOnJvCEP4yRBeCtm165aWArJIqTzum4pxpAoGAQlhsBcSwqYMO8Ftw7hbs\n6DrFqSa04j/P4w4sCiAYFsAdII0CuERv8TV6ssS64Ik5sJHRXi4vy00OxwnSfzbD\nobXNBjHvawXTuU/2Os+oti7DrVxlSklAuvfa+DPb9xiWmQh/0Dm8ijTIXRYUVpix\nH8Fnhyuqlq3y7Y5vSGLrWP8=\n-----END PRIVATE KEY-----\n",
+            "client_email": "firebase-adminsdk-fbsvc@librant-e3990.iam.gserviceaccount.com",
+            "client_id": "112901670987756640682",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs"
+          }
+      - key: FCM_PROJECT_ID
+        value: librant-e3990
     disk:
       name: library-data
       mountPath: /var/data

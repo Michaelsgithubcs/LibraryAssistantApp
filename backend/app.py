@@ -12,8 +12,9 @@ except Exception:
 import hashlib
 import secrets
 import google.generativeai as genai
-from recommendation_service import RecommendationService
-from ml_recommendation_service import MLRecommendationService
+# Lazy import recommendation services
+# from recommendation_service import RecommendationService
+# from ml_recommendation_service import MLRecommendationService
 import requests
 try:
     # prefer the HTTP v1 FCM helper if available
@@ -2012,9 +2013,23 @@ def get_read_history(user_id):
 # Initialize database on import
 init_db()
 
-# Initialize recommendation services
-recommendation_service = RecommendationService(DATABASE)
-ml_recommendation_service = MLRecommendationService(DATABASE)
+# Lazy initialization of recommendation services
+recommendation_service = None
+ml_recommendation_service = None
+
+def get_recommendation_service():
+    global recommendation_service
+    if recommendation_service is None:
+        from recommendation_service import RecommendationService
+        recommendation_service = RecommendationService(DATABASE)
+    return recommendation_service
+
+def get_ml_recommendation_service():
+    global ml_recommendation_service
+    if ml_recommendation_service is None:
+        from ml_recommendation_service import MLRecommendationService
+        ml_recommendation_service = MLRecommendationService(DATABASE)
+    return ml_recommendation_service
 
 @app.route('/api/ai/assistant', methods=['POST'])
 def ai_book_assistant():
@@ -2061,17 +2076,17 @@ def get_recommendations(user_id):
         
         if rec_type == 'ml':
             # Use the new ML-based recommendation service
-            ml_recs = ml_recommendation_service.get_recommendations(user_id, limit)
+            ml_recs = get_ml_recommendation_service().get_recommendations(user_id, limit)
             # Extract content-based recommendations as the main recommendation list
             recommendations = ml_recs.get('content_based', [])
         else:
             # For legacy recommendation types, we need to filter here
             if rec_type == 'collaborative':
-                recommendations = recommendation_service.collaborative_filtering(user_id, limit * 2)
+                recommendations = get_recommendation_service().collaborative_filtering(user_id, limit * 2)
             elif rec_type == 'content':
-                recommendations = recommendation_service.content_based_filtering(user_id, limit * 2)
+                recommendations = get_recommendation_service().content_based_filtering(user_id, limit * 2)
             else:  # hybrid
-                recommendations = recommendation_service.hybrid_recommendation(user_id, limit * 2)
+                recommendations = get_recommendation_service().hybrid_recommendation(user_id, limit * 2)
             
             # Filter out books the user has already borrowed or purchased
             conn = sqlite3.connect(DATABASE)
@@ -2129,7 +2144,7 @@ def get_similar_books(book_id):
         limit = int(request.args.get('limit', '5'))
         
         # Get similar books using ML recommendation service
-        similar_books = ml_recommendation_service.get_similar_books(book_id, limit)
+        similar_books = get_ml_recommendation_service().get_similar_books(book_id, limit)
         
         return jsonify({
             'success': True,
