@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ViewStyle, TextStyle, GestureResponderEvent, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import Markdown from 'react-native-markdown-display';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -491,12 +492,9 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
                         <ActivityIndicator size="small" color={colors.text.muted} />
                       </View>
                     ) : (
-                      <Text style={[
-                        message.isUser ? styles.userText : styles.botText,
-                        { fontSize: 15 }
-                      ]}>
+                      <Markdown style={message.isUser ? markdownStylesUser : markdownStylesBot}>
                         {message.text}
-                      </Text>
+                      </Markdown>
                     )}
                     <Text style={[
                       commonStyles.textMuted,
@@ -1136,5 +1134,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text.muted,
     textDecorationLine: 'underline',
+  },
+});
+
+const markdownStylesBot = StyleSheet.create({
+  body: {
+    color: colors.text.primary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  bullet_list: {
+    marginVertical: 6,
+  },
+  ordered_list: {
+    marginVertical: 6,
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  strong: {
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  paragraph: {
+    marginBottom: 6,
+  },
+  code_inline: {
+    backgroundColor: '#EEF2F7',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+});
+
+const markdownStylesUser = StyleSheet.create({
+  body: {
+    color: colors.text.inverse,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  bullet_list: {
+    marginVertical: 6,
+  },
+  ordered_list: {
+    marginVertical: 6,
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  strong: {
+    fontWeight: '700',
+    color: colors.text.inverse,
+  },
+  paragraph: {
+    marginBottom: 6,
+  },
+  code_inline: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
 });

@@ -79,5 +79,33 @@
           <action android:name="android.intent.action.QUICKBOOT_POWERON" />
         </intent-filter>
       </receiver>
+
+      <!-- Widget Providers -->
+      <receiver
+        android:name=".widgets.DueBooksWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/due_books_widget_info" />
+      </receiver>
+
+      <receiver
+        android:name=".widgets.LibraryAssistantWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/library_assistant_widget_info" />
+      </receiver>
+
+      <!-- Widget Update Service -->
+      <service
+        android:name=".widgets.WidgetUpdateService"
+        android:exported="false" />
     </application>
 </manifest>
