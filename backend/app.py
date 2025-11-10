@@ -307,21 +307,26 @@ def send_push_to_user(user_id: int, title: str, message: str, data: dict = None)
     Falls back silently if no tokens are present or sending fails.
     """
     try:
+        print(f'[Push] Attempting to send push to user {user_id}: "{title}"')
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         cursor.execute('SELECT token, platform FROM device_tokens WHERE user_id = ?', (user_id,))
         rows = cursor.fetchall()
         conn.close()
 
+        print(f'[Push] Found {len(rows)} device tokens for user {user_id}')
         if not rows:
             print(f'[Push] No device tokens for user {user_id}')
             return False
 
         sent_any = False
         for token, platform in rows:
+            print(f'[Push] Sending to {platform} device: {token[:20]}...')
             ok = send_fcm(token, title, message, data or {})
+            print(f'[Push] Send result for {platform}: {ok}')
             sent_any = sent_any or ok
 
+        print(f'[Push] Push sending completed for user {user_id}, success: {sent_any}')
         return sent_any
     except Exception as e:
         print(f'[Push] Error while sending push to user {user_id}: {e}')
@@ -2039,35 +2044,25 @@ def create_notification(user_id):
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/users/<int:user_id>/device-tokens', methods=['POST'])
-def register_device_token(user_id):
-    data = request.json or {}
-    token = data.get('token')
-    platform = data.get('platform', '')
-
-    if not token:
-        return jsonify({'error': 'Missing token'}), 400
-
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+@app.route('/api/debug/device-tokens/<int:user_id>', methods=['GET'])
+def debug_device_tokens(user_id):
+    """Debug endpoint to check device tokens for a user"""
     try:
-        # Try to insert; if token already exists for user, update last_seen
-        try:
-            cursor.execute('''
-                INSERT INTO device_tokens (user_id, token, platform, last_seen)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (user_id, token, platform))
-        except sqlite3.IntegrityError:
-            cursor.execute('''
-                UPDATE device_tokens SET last_seen = CURRENT_TIMESTAMP, platform = ?
-                WHERE user_id = ? AND token = ?
-            ''', (platform, user_id, token))
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM device_tokens WHERE user_id = ?', (user_id,))
+        count = cursor.fetchone()[0]
 
-        conn.commit()
+        cursor.execute('SELECT token, platform, last_seen FROM device_tokens WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5', (user_id,))
+        tokens = cursor.fetchall()
         conn.close()
-        return jsonify({'message': 'Device token registered'})
+
+        return jsonify({
+            'user_id': user_id,
+            'token_count': count,
+            'recent_tokens': [{'platform': t[1], 'last_seen': t[2], 'token_preview': t[0][:20] + '...'} for t in tokens]
+        })
     except Exception as e:
-        conn.close()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
