@@ -375,8 +375,7 @@ const MainNavigator = ({ user }: { user: any }) => {
 };
 
 const AppContent = () => {
-  // Force re-render when auth state changes by using a unique key
-  const [navigationKey, setNavigationKey] = React.useState(Date.now().toString());
+  // Remove the navigation key remounting that causes conflicts
   const { user, loading, authStateVersion } = useAuth();
   const [isNotificationVisible, setIsNotificationVisible] = React.useState(false);
   
@@ -392,19 +391,6 @@ const AppContent = () => {
   
   // Create a ref to hold the notification service
   const notificationServiceRef = React.useRef<any>(null);
-  
-  // Update the navigation key when auth state changes
-  React.useEffect(() => {
-    // Generate a new key whenever the auth state version changes
-    // This will force the NavigationContainer to re-mount
-    setNavigationKey(Date.now().toString());
-    
-    // Log the auth state change to help with debugging
-    console.log('Auth state changed:', { 
-      isLoggedIn: !!user, 
-      version: authStateVersion 
-    });
-  }, [authStateVersion, user]);
   
   // Handle app state changes directly without using notification context
   React.useEffect(() => {
@@ -439,31 +425,52 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer key={navigationKey}>
+      <NavigationContainer>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen 
-            name="Login"
-            component={LoginScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen 
-            name="AccountRequest"
-            component={AccountRequestScreen}
-            options={{ 
-              headerShown: true,
-              title: 'Request Account',
-              headerBackTitle: 'Back'
-            }}
-          />
-          {user && (
-            <Stack.Screen 
-              name="Main" 
-              children={() => <MainNavigator user={user} />}
-              options={{
-                headerShown: false
-              }}
-            />
+          {user ? (
+            // Authenticated screens
+            <>
+              <Stack.Screen 
+                name="Main" 
+                children={() => <MainNavigator user={user} />}
+                options={{
+                  headerShown: false
+                }}
+              />
+              <Stack.Screen 
+                name="Login"
+                component={LoginScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="AccountRequest"
+                component={AccountRequestScreen}
+                options={{ 
+                  headerShown: true,
+                  title: 'Request Account',
+                  headerBackTitle: 'Back'
+                }}
+              />
+            </>
+          ) : (
+            // Unauthenticated screens
+            <>
+              <Stack.Screen 
+                name="Login"
+                component={LoginScreen}
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
+                name="AccountRequest"
+                component={AccountRequestScreen}
+                options={{ 
+                  headerShown: true,
+                  title: 'Request Account',
+                  headerBackTitle: 'Back'
+                }}
+              />
+            </>
           )}
         </Stack.Navigator>
         

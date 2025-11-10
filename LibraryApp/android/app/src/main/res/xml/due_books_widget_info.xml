@@ -4,7 +4,6 @@
     android:minHeight="110dp"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/due_books_widget"
-    android:configure="com.libraryapp.widgets.DueBooksWidgetConfigureActivity"
     android:resizeMode="vertical|horizontal"
     android:widgetCategory="home_screen">
 </appwidget-provider>
