@@ -2044,6 +2044,18 @@ def create_notification(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/debug/routes', methods=['GET'])
+def debug_routes():
+    """Debug endpoint to list all registered routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'rule': str(rule.rule),
+            'methods': list(rule.methods),
+            'endpoint': rule.endpoint
+        })
+    return jsonify({'routes': routes})
+
 @app.route('/api/users/<int:user_id>/device-tokens', methods=['POST'])
 def register_device_token(user_id):
     data = request.json or {}
