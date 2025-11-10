@@ -2388,8 +2388,8 @@ def ai_book_assistant_v2():
             print("Sending request to Gemini API...")
             import requests as req
             
-            # Use REST API directly with gemini-pro (stable model)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
+            # Use REST API directly with gemini-2.0-flash (stable and widely available)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
             
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
             payload = {
