@@ -43,7 +43,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
       // Set loading to false after successful login
       setLoading(false);
       
-      // Navigation will be handled automatically by the auth state change in App.tsx
+      // Navigate to main screen immediately
+      console.log("Attempting to navigate to Main screen");
+      try {
+        if (navigation) {
+          navigation.navigate('Main');
+          console.log("Navigation to Main completed");
+        } else {
+          console.log("Navigation prop not available");
+        }
+      } catch (error) {
+        console.error("Navigation error in LoginScreen:", error);
+      }
       
     } catch (error) {
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Invalid credentials');

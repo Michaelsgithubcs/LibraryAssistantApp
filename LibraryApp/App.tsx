@@ -397,14 +397,26 @@ const AppContent = () => {
       
       // Navigate programmatically when auth state changes
       if (navigationRef.current) {
+        console.log('Navigation ref exists, current route:', navigationRef.current.getCurrentRoute()?.name);
         if (user) {
           console.log('Navigating to Main screen after login');
-          // Use navigate instead of reset for better compatibility
-          navigationRef.current.navigate('Main');
+          try {
+            navigationRef.current.navigate('Main');
+            console.log('Navigation call completed');
+          } catch (error) {
+            console.error('Navigation error:', error);
+          }
         } else {
           console.log('Navigating to Login screen after logout');
-          navigationRef.current.navigate('Login');
+          try {
+            navigationRef.current.navigate('Login');
+            console.log('Navigation call completed');
+          } catch (error) {
+            console.error('Navigation error:', error);
+          }
         }
+      } else {
+        console.log('Navigation ref is null');
       }
       
       prevUserRef.current = user;
