@@ -2044,6 +2044,37 @@ def create_notification(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/users/<int:user_id>/device-tokens', methods=['POST'])
+def register_device_token(user_id):
+    data = request.json or {}
+    token = data.get('token')
+    platform = data.get('platform', '')
+
+    if not token:
+        return jsonify({'error': 'Missing token'}), 400
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    try:
+        # Try to insert; if token already exists for user, update last_seen
+        try:
+            cursor.execute('''
+                INSERT INTO device_tokens (user_id, token, platform, last_seen)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, token, platform))
+        except sqlite3.IntegrityError:
+            cursor.execute('''
+                UPDATE device_tokens SET last_seen = CURRENT_TIMESTAMP, platform = ?
+                WHERE user_id = ? AND token = ?
+            ''', (platform, user_id, token))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Device token registered'})
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/debug/device-tokens/<int:user_id>', methods=['GET'])
 def debug_device_tokens(user_id):
     """Debug endpoint to check device tokens for a user"""
