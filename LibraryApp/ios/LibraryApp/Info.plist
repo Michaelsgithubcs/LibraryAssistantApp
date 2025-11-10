@@ -37,6 +37,8 @@
 	<string>This app needs access to your microphone to transcribe voice messages for the book chat assistant.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app needs access to speech recognition to convert your voice to text for easier chatting with the book assistant.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>This app needs permission to send you notifications about your library books and updates.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

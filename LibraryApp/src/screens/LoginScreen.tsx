@@ -22,10 +22,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
   // Check if user is already logged in
   useEffect(() => {
     if (user) {
-      console.log("User already logged in");
-      // Navigation will be handled by the auth state change in App.tsx
+      console.log("User already logged in, navigating to main screen");
+      // Navigate to main screen if user becomes logged in
+      if (navigation) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+      }
     }
-  }, [user]);
+  }, [user, navigation]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -48,7 +54,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
       // Set the user in auth context
       await authLogin(userData);
       
-      // Navigation will be handled automatically by the auth state change
+      // Set loading to false after successful login
+      setLoading(false);
+      
+      // Force navigation to main screen after a short delay to ensure state is updated
+      setTimeout(() => {
+        if (navigation) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Main' }],
+          });
+        }
+      }, 500);
       
     } catch (error) {
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Invalid credentials');

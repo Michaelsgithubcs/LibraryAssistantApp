@@ -18,9 +18,15 @@ from ml_recommendation_service import MLRecommendationService
 import requests
 try:
     # prefer the HTTP v1 FCM helper if available
-    from backend.fcm import send_fcm_v1, get_access_token
+    import sys
+    import os
+    # Add current directory to path to ensure fcm module can be found
+    sys.path.insert(0, os.path.dirname(__file__))
+    from fcm import send_fcm_v1, get_access_token
     FCM_V1_AVAILABLE = True
-except Exception:
+    print("[Startup] FCM v1 initialized successfully")
+except Exception as e:
+    print(f"[Startup] FCM v1 initialization failed: {e}")
     send_fcm_v1 = None
     FCM_V1_AVAILABLE = False
 

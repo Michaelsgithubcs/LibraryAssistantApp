@@ -10,3 +10,7 @@ services:
         value: 3.11.5
       - key: GEMINI_API_KEY
         sync: false
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /opt/render/project/src/backend/service_account.json

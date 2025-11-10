@@ -387,7 +387,7 @@ const AppContent = () => {
       console.log('User state changed:', user ? 'Logged in' : 'Logged out');
       prevUserRef.current = user;
     }
-  }, [user]);
+  }, [user, authStateVersion]); // Add authStateVersion to dependencies
   
   // Create a ref to hold the notification service
   const notificationServiceRef = React.useRef<any>(null);
@@ -425,7 +425,7 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer>
+      <NavigationContainer key={`nav-${authStateVersion}`}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {user ? (

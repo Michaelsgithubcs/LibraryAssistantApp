@@ -40,6 +40,15 @@ def send_fcm_v1(device_token: str, title: str, body: str, data: Dict[str, Any] |
                     'default_vibrate_timings': True,
                     'default_sound': True
                 }
+            },
+            'apns': {
+                'payload': {
+                    'aps': {
+                        'alert': {'title': title, 'body': body},
+                        'badge': 1,
+                        'sound': 'default'
+                    }
+                }
             }
         }
     }
