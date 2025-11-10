@@ -2388,8 +2388,8 @@ def ai_book_assistant_v2():
             print("Sending request to Gemini API...")
             import requests as req
             
-            # Use REST API directly with gemini-2.0-flash (available model)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+            # Use REST API directly with gemini-pro (stable model)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
             
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
             payload = {
@@ -2417,11 +2417,30 @@ def ai_book_assistant_v2():
             print(f"Error type: {type(ai_error).__name__}")
             if hasattr(ai_error, 'args'):
                 print(f"Error args: {ai_error.args}")
-            return jsonify({
-                'error': 'AI processing failed',
-                'details': str(ai_error),
-                'type': type(ai_error).__name__
-            }), 500
+            
+            # Provide more specific error messages
+            error_msg = str(ai_error).lower()
+            if 'api key' in error_msg or 'unauthorized' in error_msg:
+                return jsonify({
+                    'error': 'AI service not configured: Invalid or missing API key',
+                    'details': 'Please check that GEMINI_API_KEY is properly set in environment variables'
+                }), 500
+            elif 'model' in error_msg or 'not found' in error_msg:
+                return jsonify({
+                    'error': 'AI model unavailable',
+                    'details': 'The requested AI model is not available. Please try again later.'
+                }), 503
+            elif 'quota' in error_msg or 'rate limit' in error_msg:
+                return jsonify({
+                    'error': 'AI service quota exceeded',
+                    'details': 'AI service is temporarily unavailable due to quota limits. Please try again later.'
+                }), 429
+            else:
+                return jsonify({
+                    'error': 'AI processing failed',
+                    'details': str(ai_error),
+                    'type': type(ai_error).__name__
+                }), 500
             
     except Exception as e:
         print(f"Unexpected error in AI assistant: {str(e)}")
