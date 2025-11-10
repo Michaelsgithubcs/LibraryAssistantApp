@@ -2248,13 +2248,45 @@ def get_recommendations(user_id):
     try:
         # Get recommendation type from query params (default: ml)
         rec_type = request.args.get('type', 'ml')
-        limit = int(request.args.get('limit', '5'))
+        limit = min(int(request.args.get('limit', '5')), 20)  # Cap at 20 to prevent memory issues
+        
+        print(f"Getting {rec_type} recommendations for user {user_id}, limit {limit}", file=sys.stderr)
         
         if rec_type == 'ml':
-            # Use the new ML-based recommendation service
-            ml_recs = get_ml_recommendation_service().get_recommendations(user_id, limit)
-            # Extract content-based recommendations as the main recommendation list
-            recommendations = ml_recs.get('content_based', [])
+            try:
+                # Use the new ML-based recommendation service
+                ml_recs = get_ml_recommendation_service().get_recommendations(user_id, limit)
+                # Extract content-based recommendations as the main recommendation list
+                recommendations = ml_recs.get('content_based', [])
+            except Exception as ml_error:
+                print(f"ML recommendation service failed: {str(ml_error)}", file=sys.stderr)
+                # Fallback to basic collaborative filtering
+                try:
+                    recommendations = get_recommendation_service().collaborative_filtering(user_id, limit)
+                    print("Fallback to collaborative filtering successful", file=sys.stderr)
+                except Exception as collab_error:
+                    print(f"Collaborative filtering also failed: {str(collab_error)}", file=sys.stderr)
+                    # Final fallback: return some popular books from database
+                    conn = sqlite3.connect(DATABASE)
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT id, title, author, category, description, cover_image 
+                        FROM books 
+                        ORDER BY total_copies DESC 
+                        LIMIT ?
+                    """, (limit,))
+                    popular_books = cursor.fetchall()
+                    conn.close()
+                    
+                    recommendations = [{
+                        'id': book[0],
+                        'title': book[1],
+                        'author': book[2],
+                        'category': book[3],
+                        'description': book[4],
+                        'cover_image': book[5]
+                    } for book in popular_books]
+                    print("Using popular books as final fallback", file=sys.stderr)
         else:
             # For legacy recommendation types, we need to filter here
             if rec_type == 'collaborative':
