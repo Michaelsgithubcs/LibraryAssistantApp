@@ -13,8 +13,8 @@ import hashlib
 import secrets
 import google.generativeai as genai
 # Lazy import recommendation services
-# from recommendation_service import RecommendationService
-# from ml_recommendation_service import MLRecommendationService
+from recommendation_service import RecommendationService
+from ml_recommendation_service import MLRecommendationService
 import requests
 try:
     # prefer the HTTP v1 FCM helper if available
@@ -2688,6 +2688,456 @@ def delete_conversation(conversation_id):
     except Exception as e:
         conn.close()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ai/library-assistant', methods=['POST'])
+def ai_library_assistant():
+    """
+    AI-powered library assistant that can answer questions about:
+    - Book recommendations and search
+    - Library policies and services
+    - User account information
+    - Reading suggestions based on preferences
+    - General library inquiries
+    """
+    try:
+        print("Library Assistant AI endpoint called")
+
+        # Check for API key
+        api_key = os.getenv('GENAI_API_KEY') or os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            print("Error: No API key found")
+            return jsonify({'error': 'AI not configured: Missing API key'}), 500
+
+        # Configure Gemini AI
+        try:
+            genai.configure(api_key=api_key)
+        except Exception as config_error:
+            print(f"Error configuring GenAI: {str(config_error)}")
+            return jsonify({'error': f'Failed to configure AI: {str(config_error)}'}), 500
+
+        data = request.json or {}
+        user_id = data.get('user_id')
+        question = data.get('question', '').strip()
+
+        if not question:
+            return jsonify({'error': 'question is required'}), 400
+
+        # Get user context if available
+        user_context = ""
+        ml_recommendations = []
+
+        if user_id:
+            try:
+                # Get user borrowing history for personalized recommendations
+                ml_service = MLRecommendationService('library.db')
+                user_history = ml_service.get_user_history(user_id)
+
+                if user_history:
+                    # Get user's borrowed books for context
+                    conn = sqlite3.connect('library.db')
+                    cursor = conn.cursor()
+
+                    placeholders = ','.join('?' * len(user_history))
+                    cursor.execute(f"""
+                        SELECT title, author, category
+                        FROM books
+                        WHERE id IN ({placeholders})
+                        ORDER BY title
+                    """, user_history)
+
+                    borrowed_books = cursor.fetchall()
+                    conn.close()
+
+                    if borrowed_books:
+                        user_context = "\n\nUser's Reading History:\n" + "\n".join([
+                            f"- {title} by {author} ({category})"
+                            for title, author, category in borrowed_books[:10]  # Limit to 10 most recent
+                        ])
+
+                        # Get personalized recommendations
+                        recommendations = ml_service.content_based_recommendations(user_id, 5)
+                        if recommendations:
+                            ml_recommendations = recommendations
+
+            except Exception as e:
+                print(f"Error getting user context: {str(e)}")
+                # Continue without user context
+
+        # Get user account information if user_id is provided
+        user_account_info = ""
+        if user_id:
+            try:
+                conn = sqlite3.connect('library.db')
+                cursor = conn.cursor()
+
+                # Get user's current borrowed books
+                cursor.execute("""
+                    SELECT b.title, b.author, bi.due_date, bi.issue_date,
+                           CASE WHEN bi.due_date < date('now') THEN 1 ELSE 0 END as is_overdue
+                    FROM book_issues bi
+                    JOIN books b ON bi.book_id = b.id
+                    WHERE bi.user_id = ? AND bi.return_date IS NULL
+                    ORDER BY bi.due_date
+                """, (user_id,))
+
+                borrowed_books = cursor.fetchall()
+
+                if borrowed_books:
+                    user_account_info += f"\n\nYour Current Loans ({len(borrowed_books)} books):\n"
+                    overdue_count = 0
+                    for title, author, due_date, issue_date, is_overdue in borrowed_books:
+                        status = "⚠️ OVERDUE" if is_overdue else "✅ On time"
+                        if is_overdue:
+                            overdue_count += 1
+                        user_account_info += f"• {title} by {author} (Due: {due_date}) - {status}\n"
+
+                    if overdue_count > 0:
+                        user_account_info += f"\n⚠️ You have {overdue_count} overdue book(s). Please return them to avoid fines."
+
+                # Get user's fines
+                cursor.execute("""
+                    SELECT SUM(amount) as total_fines, COUNT(*) as fine_count
+                    FROM fines
+                    WHERE user_id = ? AND paid = 0
+                """, (user_id,))
+
+                fine_info = cursor.fetchone()
+                if fine_info and fine_info[0]:
+                    user_account_info += f"\n\n💰 Outstanding Fines: R{fine_info[0]:.2f} ({fine_info[1]} items)"
+                    user_account_info += "\n   Fines accrue at R5 per day for overdue books."
+
+                # Get user's reservation count
+                cursor.execute("""
+                    SELECT COUNT(*) as reservation_count
+                    FROM reservations
+                    WHERE user_id = ? AND status = 'pending'
+                """, (user_id,))
+
+                reservation_info = cursor.fetchone()
+                if reservation_info and reservation_info[0] > 0:
+                    user_account_info += f"\n\n📋 Active Reservations: {reservation_info[0]}"
+                    user_account_info += "\n   You can have up to 5 active reservations."
+
+                # Get user's total borrowing history
+                cursor.execute("""
+                    SELECT COUNT(*) as total_borrowed
+                    FROM book_issues
+                    WHERE user_id = ?
+                """, (user_id,))
+
+                history_info = cursor.fetchone()
+                if history_info and history_info[0] > 0:
+                    user_account_info += f"\n\n📚 Total Books Borrowed: {history_info[0]}"
+
+                conn.close()
+
+            except Exception as e:
+                print(f"Error getting user account info: {str(e)}")
+
+        # Get current library stats for context
+        library_stats = ""
+        book_search_results = []
+        
+        try:
+            conn = sqlite3.connect('library.db')
+            cursor = conn.cursor()
+
+            # Get total books, available books, etc.
+            cursor.execute("""
+                SELECT
+                    COUNT(*) as total_books,
+                    SUM(available_copies) as available_copies,
+                    COUNT(CASE WHEN available_copies > 0 THEN 1 END) as available_titles
+                FROM books
+            """)
+            stats = cursor.fetchone()
+
+            if stats:
+                library_stats = f"""
+Library Statistics:
+- Total book titles: {stats[2] or 0}
+- Total book copies: {stats[0] or 0}
+- Currently available copies: {stats[1] or 0}
+"""
+
+            # Get popular categories
+            cursor.execute("""
+                SELECT category, COUNT(*) as count
+                FROM books
+                GROUP BY category
+                ORDER BY count DESC
+                LIMIT 5
+            """)
+            categories = cursor.fetchall()
+
+            if categories:
+                library_stats += "\nPopular Categories:\n" + "\n".join([
+                    f"- {cat}: {count} books" for cat, count in categories
+                ])
+
+            # Check if the question is about book search
+            question_lower = question.lower()
+            if any(keyword in question_lower for keyword in ['find', 'search', 'looking for', 'have', 'available', 'books about', 'books by']):
+                # Extract potential search terms
+                search_terms = []
+                
+                # Look for book titles in quotes
+                import re
+                title_matches = re.findall(r'"([^"]*)"', question)
+                if title_matches:
+                    search_terms.extend(title_matches)
+                
+                # Look for author names (common patterns)
+                author_patterns = [
+                    r'by\s+([A-Z][a-z]+\s+[A-Z][a-z]+)',  # "by First Last"
+                    r'([A-Z][a-z]+\s+[A-Z][a-z]+)',       # Any "First Last" pattern
+                ]
+                
+                for pattern in author_patterns:
+                    matches = re.findall(pattern, question)
+                    search_terms.extend(matches)
+                
+                # If no specific terms found, use the whole question for fuzzy search
+                if not search_terms:
+                    search_terms = [question.replace('find', '').replace('search', '').replace('looking for', '').strip()]
+                
+                # Perform book search
+                for term in search_terms[:3]:  # Limit to 3 search terms
+                    term = term.strip()
+                    if len(term) < 3:  # Skip very short terms
+                        continue
+                        
+                    cursor.execute("""
+                        SELECT id, title, author, category, description, available_copies, total_copies
+                        FROM books 
+                        WHERE (title LIKE ? OR author LIKE ? OR category LIKE ? OR description LIKE ?)
+                        AND available_copies > 0
+                        ORDER BY 
+                            CASE 
+                                WHEN title LIKE ? THEN 1
+                                WHEN author LIKE ? THEN 2
+                                ELSE 3
+                            END,
+                            title
+                        LIMIT 5
+                    """, (f'%{term}%', f'%{term}%', f'%{term}%', f'%{term}%', f'%{term}%', f'%{term}%'))
+                    
+                    results = cursor.fetchall()
+                    for result in results:
+                        book_search_results.append({
+                            'id': result[0],
+                            'title': result[1],
+                            'author': result[2],
+                            'category': result[3],
+                            'description': result[4] or 'No description available',
+                            'available_copies': result[5],
+                            'total_copies': result[6]
+                        })
+                    
+                    # If we found results, break
+                    if book_search_results:
+                        break
+                
+                # Remove duplicates
+                seen = set()
+                unique_results = []
+                for book in book_search_results:
+                    book_key = (book['title'], book['author'])
+                    if book_key not in seen:
+                        seen.add(book_key)
+                        unique_results.append(book)
+                
+                book_search_results = unique_results[:5]  # Limit to 5 results
+
+            # Check if user is asking to compare books
+            comparison_results = []
+            question_lower = question.lower()
+            if any(keyword in question_lower for keyword in ['compare', 'vs', 'versus', 'difference between', 'similar to', 'like']):
+                # Extract book titles to compare
+                compare_titles = []
+                
+                # Look for quoted titles
+                import re
+                title_matches = re.findall(r'"([^"]*)"', question)
+                compare_titles.extend(title_matches)
+                
+                # Look for common comparison patterns
+                if ' vs ' in question_lower:
+                    parts = question_lower.split(' vs ')
+                    compare_titles.extend([part.strip() for part in parts])
+                elif ' versus ' in question_lower:
+                    parts = question_lower.split(' versus ')
+                    compare_titles.extend([part.strip() for part in parts])
+                elif ' compared to ' in question_lower:
+                    parts = question_lower.split(' compared to ')
+                    compare_titles.extend([part.strip() for part in parts])
+                
+                # Find books in database for comparison
+                if len(compare_titles) >= 2:
+                    try:
+                        conn = sqlite3.connect('library.db')
+                        cursor = conn.cursor()
+                        
+                        for title in compare_titles[:3]:  # Compare up to 3 books
+                            title = title.strip()
+                            if len(title) < 3:
+                                continue
+                                
+                            cursor.execute("""
+                                SELECT id, title, author, category, description, publish_date,
+                                       available_copies, total_copies
+                                FROM books 
+                                WHERE title LIKE ? OR author LIKE ?
+                                LIMIT 1
+                            """, (f'%{title}%', f'%{title}%'))
+                            
+                            book_result = cursor.fetchone()
+                            if book_result:
+                                comparison_results.append({
+                                    'id': book_result[0],
+                                    'title': book_result[1],
+                                    'author': book_result[2],
+                                    'category': book_result[3],
+                                    'description': book_result[4] or 'No description available',
+                                    'publish_date': book_result[5],
+                                    'available_copies': book_result[6],
+                                    'total_copies': book_result[7]
+                                })
+                        
+                        conn.close()
+                        
+                    except Exception as e:
+                        print(f"Error getting comparison books: {str(e)}")
+
+            conn.close()
+
+        except Exception as e:
+            print(f"Error getting library stats or search results: {str(e)}")
+
+        # Create comprehensive system prompt
+        system_prompt = f"""You are an intelligent Library Assistant AI with access to real library data and machine learning recommendations.
+
+Your capabilities include:
+1. **Book Search & Discovery**: Help users find books by title, author, genre, or keywords
+2. **Personalized Recommendations**: Suggest books based on reading history and preferences
+3. **Library Services**: Explain policies, hours, fines, reservations, and procedures
+4. **Reading Guidance**: Provide insights, summaries, and discussion points
+5. **Account Assistance**: Help with borrowing history, due dates, and account management
+
+{library_stats}
+
+Always provide helpful, accurate information. If you don't have specific data, acknowledge limitations but still assist where possible.
+Be conversational and engaging while being informative.
+For recommendations, consider the user's reading history when available.
+"""
+
+        # Add user context and ML recommendations to the prompt
+        enhanced_context = f"{system_prompt}{user_context}{user_account_info}"
+
+        if ml_recommendations:
+            enhanced_context += f"\n\nPersonalized Recommendations Available:\n"
+            for rec in ml_recommendations[:3]:
+                enhanced_context += f"- {rec['title']} by {rec['author']} ({rec['category']})\n"
+
+        # Create the user prompt
+        user_prompt = f"User Question: {question}"
+
+        print("Sending request to Gemini API for library assistant...")
+
+        # Use Gemini API
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+        full_prompt = f"{enhanced_context}\n\n{user_prompt}"
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": full_prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 1000,
+                "topP": 0.8,
+                "topK": 40
+            }
+        }
+
+        response = requests.post(url, json=payload, timeout=15)
+        response.raise_for_status()
+
+        result = response.json()
+        if 'candidates' in result and result['candidates']:
+            ai_response = result['candidates'][0]['content']['parts'][0]['text'].strip()
+
+            # Post-process response to add interactive elements
+            enhanced_response = ai_response
+
+            # Add book search results if available
+            if book_search_results:
+                enhanced_response += f"\n\n📚 I found these books that match your search:\n"
+                for i, book in enumerate(book_search_results[:3], 1):
+                    enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
+                    enhanced_response += f"   Category: {book['category']}\n"
+                    enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
+                
+                if len(book_search_results) > 3:
+                    enhanced_response += f"\n   ... and {len(book_search_results) - 3} more results"
+                
+                enhanced_response += "\n\n💡 You can ask me to reserve any of these books!"
+
+            # Add book comparison results if available
+            if comparison_results and len(comparison_results) >= 2:
+                enhanced_response += f"\n\n⚖️ Book Comparison ({len(comparison_results)} books):\n"
+                for i, book in enumerate(comparison_results, 1):
+                    enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
+                    enhanced_response += f"   Category: {book['category']}\n"
+                    enhanced_response += f"   Published: {book['publish_date'] or 'Unknown'}\n"
+                    enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
+                
+                enhanced_response += "\n💡 I can help you compare these books in terms of themes, writing style, or popularity!"
+
+            # Add book search suggestions if relevant
+            elif any(keyword in question.lower() for keyword in ['find', 'search', 'looking for', 'recommend']):
+                enhanced_response += "\n\n💡 Tip: You can also use the Book Search feature in the app to browse available books!"
+
+            return jsonify({
+                'answer': enhanced_response,
+                'has_recommendations': len(ml_recommendations) > 0,
+                'recommendations': ml_recommendations[:3] if ml_recommendations else [],
+                'search_results': book_search_results[:5] if book_search_results else [],
+                'comparison_results': comparison_results[:3] if comparison_results else []
+            })
+
+        else:
+            return jsonify({'error': 'No response generated from AI'}), 500
+
+    except Exception as e:
+        print(f"Error in library assistant AI: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        # Provide helpful fallback responses
+        question_lower = question.lower()
+
+        if 'recommend' in question_lower or 'suggest' in question_lower:
+            return jsonify({
+                'answer': "I'd love to recommend some great books! While I'm currently experiencing technical difficulties, here are some popular choices:\n\n📚 **Fiction**: 'The Seven Husbands of Evelyn Hugo' by Taylor Jenkins Reid\n📖 **Mystery**: 'The Thursday Murder Club' by Richard Osman\n🚀 **Sci-Fi**: 'Project Hail Mary' by Andy Weir\n\nPlease try again in a moment for personalized recommendations based on your reading history!",
+                'has_recommendations': False,
+                'recommendations': []
+            })
+
+        elif 'hour' in question_lower or 'open' in question_lower:
+            return jsonify({
+                'answer': "📅 **Library Hours**:\n\n• Monday - Friday: 8:00 AM - 8:00 PM\n• Saturday: 9:00 AM - 6:00 PM\n• Sunday: 12:00 PM - 5:00 PM\n\nWe're closed on public holidays. Please try your question again for more detailed information!",
+                'has_recommendations': False,
+                'recommendations': []
+            })
+
+        else:
+            return jsonify({
+                'answer': "I'm sorry, but I'm currently experiencing connectivity issues. Please try your question again in a moment. I'm here to help with book recommendations, library information, and reading guidance!",
+                'has_recommendations': False,
+                'recommendations': []
+            })
 
 if __name__ == '__main__':
     # Bind to Render's provided PORT when deployed; fall back to local dev defaults
