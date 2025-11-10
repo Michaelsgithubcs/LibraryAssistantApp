@@ -253,6 +253,14 @@ const TabNavigator = ({ user }: { user: any }) => {
 // Removed NotificationManager component - moved logic directly to AppContent
 
 const MainNavigator = ({ user }: { user: any }) => {
+  // If no user, show loading (this shouldn't happen due to navigation logic, but safety check)
+  if (!user) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
   const dispatch = useDispatch();
   const previousNotificationIds = React.useRef<Set<number>>(new Set());
 
@@ -386,6 +394,19 @@ const AppContent = () => {
   React.useEffect(() => {
     if (prevUserRef.current !== user) {
       console.log('User state changed:', user ? 'Logged in' : 'Logged out');
+      
+      // Navigate programmatically when auth state changes
+      if (navigationRef.current) {
+        if (user) {
+          console.log('Navigating to Main screen after login');
+          // Use navigate instead of reset for better compatibility
+          navigationRef.current.navigate('Main');
+        } else {
+          console.log('Navigating to Login screen after logout');
+          navigationRef.current.navigate('Login');
+        }
+      }
+      
       prevUserRef.current = user;
     }
   }, [user, authStateVersion]); // Add authStateVersion to dependencies
@@ -432,50 +453,28 @@ const AppContent = () => {
           screenOptions={{ headerShown: false }}
           initialRouteName={user ? "Main" : "Login"}
         >
-          {user ? (
-            // Authenticated screens
-            <>
-              <Stack.Screen 
-                name="Main" 
-                children={() => <MainNavigator user={user} />}
-                options={{
-                  headerShown: false
-                }}
-              />
-              <Stack.Screen 
-                name="Login"
-                component={LoginScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="AccountRequest"
-                component={AccountRequestScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Request Account',
-                  headerBackTitle: 'Back'
-                }}
-              />
-            </>
-          ) : (
-            // Unauthenticated screens
-            <>
-              <Stack.Screen 
-                name="Login"
-                component={LoginScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="AccountRequest"
-                component={AccountRequestScreen}
-                options={{ 
-                  headerShown: true,
-                  title: 'Request Account',
-                  headerBackTitle: 'Back'
-                }}
-              />
-            </>
-          )}
+          {/* Always render both screens */}
+          <Stack.Screen 
+            name="Main" 
+            children={() => <MainNavigator user={user} />}
+            options={{
+              headerShown: false
+            }}
+          />
+          <Stack.Screen 
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AccountRequest"
+            component={AccountRequestScreen}
+            options={{ 
+              headerShown: true,
+              title: 'Request Account',
+              headerBackTitle: 'Back'
+            }}
+          />
         </Stack.Navigator>
         
         {/* Notification Modal */}
