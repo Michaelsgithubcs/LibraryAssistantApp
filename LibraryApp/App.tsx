@@ -378,6 +378,7 @@ const AppContent = () => {
   // Remove the navigation key remounting that causes conflicts
   const { user, loading, authStateVersion } = useAuth();
   const [isNotificationVisible, setIsNotificationVisible] = React.useState(false);
+  const navigationRef = React.useRef<any>(null);
   
   // Track previous auth state to detect changes
   const prevUserRef = React.useRef(user);
@@ -425,9 +426,12 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer key={`nav-${authStateVersion}`}>
+      <NavigationContainer ref={navigationRef}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator 
+          screenOptions={{ headerShown: false }}
+          initialRouteName={user ? "Main" : "Login"}
+        >
           {user ? (
             // Authenticated screens
             <>
