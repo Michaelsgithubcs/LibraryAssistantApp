@@ -468,6 +468,74 @@ export async function askBookAssistant(book: AiBookContext, question: string): P
   }
 }
 
+export async function askLibraryAssistant(userId: number | null, question: string): Promise<{
+  answer: string;
+  has_recommendations: boolean;
+  recommendations: any[];
+  search_results?: any[];
+  comparison_results?: any[];
+}> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout for more complex queries
+
+    const response = await fetch(`${API_BASE}/ai/library-assistant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, question }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || 'AI request failed');
+    }
+
+    const data = await response.json();
+    return {
+      answer: data.answer || 'No answer returned.',
+      has_recommendations: data.has_recommendations || false,
+      recommendations: data.recommendations || [],
+      search_results: data.search_results || [],
+      comparison_results: data.comparison_results || []
+    };
+  } catch (e: any) {
+    console.error('Library Assistant AI error:', e);
+
+    // Provide contextual fallback responses
+    const lowerQuestion = question.toLowerCase();
+
+    if (lowerQuestion.includes('recommend') || lowerQuestion.includes('suggest')) {
+      return {
+        answer: "I'd love to recommend some great books! While I'm currently experiencing technical difficulties, here are some popular choices:\n\n📚 **Fiction**: 'The Seven Husbands of Evelyn Hugo' by Taylor Jenkins Reid\n📖 **Mystery**: 'The Thursday Murder Club' by Richard Osman\n🚀 **Sci-Fi**: 'Project Hail Mary' by Andy Weir\n\nPlease try again in a moment for personalized recommendations based on your reading history!",
+        has_recommendations: false,
+        recommendations: [],
+        search_results: [],
+        comparison_results: []
+      };
+    }
+
+    if (lowerQuestion.includes('hour') || lowerQuestion.includes('open')) {
+      return {
+        answer: "📅 **Library Hours**:\n\n• Monday - Friday: 8:00 AM - 8:00 PM\n• Saturday: 9:00 AM - 6:00 PM\n• Sunday: 12:00 PM - 5:00 PM\n\nWe're closed on public holidays. Please try your question again for more detailed information!",
+        has_recommendations: false,
+        recommendations: [],
+        search_results: [],
+        comparison_results: []
+      };
+    }
+
+    return {
+      answer: "I'm sorry, but I'm currently experiencing connectivity issues. Please try your question again in a moment. I'm here to help with book recommendations, library information, and reading guidance!",
+      has_recommendations: false,
+      recommendations: [],
+      search_results: [],
+      comparison_results: []
+    };
+  }
+}
+
 // ============ NOTIFICATION API METHODS ============
 export const notificationApi = {
   async getUserNotifications(userId: number) {

@@ -8,7 +8,7 @@ import { VoiceRecorder } from '../components/VoiceRecorder';
 import { colors } from '../styles/colors';
 import { commonStyles } from '../styles/common';
 import { User } from '../types';
-import { apiClient } from '../services/api';
+import { apiClient, askLibraryAssistant } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ChatbotScreenProps {
@@ -35,6 +35,9 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcribingMessageId, setTranscribingMessageId] = useState<string | null>(null);
+  const [currentRecommendations, setCurrentRecommendations] = useState<any[]>([]);
+  const [currentSearchResults, setCurrentSearchResults] = useState<any[]>([]);
+  const [currentComparisonResults, setCurrentComparisonResults] = useState<any[]>([]);
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Create refs for message animations
@@ -169,53 +172,47 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
     }, 100);
   };
 
-  const generateResponse = (userMessage: string): string => {
-    const message = userMessage.toLowerCase();
-    
-    // Library hours
-    if (message.includes('hour') || message.includes('open') || message.includes('close')) {
-      return "📅 Library Hours:\n\nMonday - Friday: 8:00 AM - 8:00 PM\nSaturday: 9:00 AM - 6:00 PM\nSunday: 12:00 PM - 5:00 PM\n\nWe're closed on public holidays. You can return books 24/7 using our book drop box!";
+  const generateResponse = async (userMessage: string): Promise<string> => {
+    try {
+      // Use the AI-powered library assistant
+      const response = await askLibraryAssistant(user.id, userMessage);
+
+      // Store recommendations if available
+      if (response.has_recommendations && response.recommendations.length > 0) {
+        setCurrentRecommendations(response.recommendations);
+      } else {
+        setCurrentRecommendations([]);
+      }
+
+      // Store search results if available
+      if (response.search_results && response.search_results.length > 0) {
+        setCurrentSearchResults(response.search_results);
+      } else {
+        setCurrentSearchResults([]);
+      }
+
+      // Store comparison results if available
+      if (response.comparison_results && response.comparison_results.length > 0) {
+        setCurrentComparisonResults(response.comparison_results);
+      } else {
+        setCurrentComparisonResults([]);
+      }
+
+      return response.answer;
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+
+      // Fallback to basic responses if AI fails
+      const message = userMessage.toLowerCase();
+
+      // Library hours
+      if (message.includes('hour') || message.includes('open') || message.includes('close')) {
+        return "� Library Hours:\n\nMonday - Friday: 8:00 AM - 8:00 PM\nSaturday: 9:00 AM - 6:00 PM\nSunday: 12:00 PM - 5:00 PM\n\nWe're closed on public holidays. You can return books 24/7 using our book drop box!";
+      }
+
+      // Default fallback
+      return "I'm currently experiencing some technical difficulties, but I'm here to help! Please try your question again in a moment, or feel free to ask about:\n\n• Book recommendations\n• Library hours and policies\n• Your account information\n• Reading suggestions";
     }
-    
-    // Book recommendations
-    if (message.includes('recommend') || message.includes('suggest') || message.includes('good book')) {
-      return "📚 Here are some popular recommendations:\n\n• Fiction: \"The Seven Husbands of Evelyn Hugo\" by Taylor Jenkins Reid\n• Mystery: \"The Thursday Murder Club\" by Richard Osman\n• Sci-Fi: \"Project Hail Mary\" by Andy Weir\n• Non-Fiction: \"Atomic Habits\" by James Clear\n\nWould you like recommendations in a specific genre? Just let me know your interests!";
-    }
-    
-    // Fines and fees
-    if (message.includes('fine') || message.includes('fee') || message.includes('overdue')) {
-      return "💰 About Library Fines:\n\n• Overdue books: R5 per day\n• Lost books: Full replacement cost\n• Damaged books: Assessed individually\n\nYou can check your current fines in the 'My Fines' section. All payments must be made in cash at the front desk.";
-    }
-    
-    // Renewals
-    if (message.includes('renew') || message.includes('extend')) {
-      return "🔄 Book Renewals:\n\n• Books can be renewed once if no one is waiting\n• Renewal period: 14 additional days\n• You can renew up to 3 days before the due date\n\nTo renew, visit the library or call us at (011) 123-4567. Online renewals coming soon!";
-    }
-    
-    // Account info
-    if (message.includes('account') || message.includes('profile') || message.includes('card')) {
-      return `👤 Your Account Info:\n\nName: ${user.username}\nEmail: ${user.email}\nMember since: Active member\n\nYou can view your issued books and fines in the respective sections of this app. Need to update your details? Visit the front desk with ID.`;
-    }
-    
-    // Contact info
-    if (message.includes('contact') || message.includes('phone') || message.includes('address')) {
-      return "📞 Contact Information:\n\nPhone: (011) 123-4567\nEmail: info@library.com\nAddress: 123 Library Street, City Center\n\nYou can also visit our website at www.library.com for more information!";
-    }
-    
-    // Reservations
-    if (message.includes('reserve') || message.includes('hold') || message.includes('request')) {
-      return "📋 Book Reservations:\n\n• Search for books in the 'Book Search' section\n• Tap 'Reserve' on available books\n• Admin will approve your request\n• You'll get notified when approved\n• Pick up within 3 days of notification\n\nReservations are free and you can have up to 5 active reservations.";
-    }
-    
-    // Default responses
-    const responses = [
-      "I'd be happy to help you with that! Could you provide more details about what you're looking for?",
-      "That's a great question! For specific information, you might want to speak with our librarians at the front desk, or I can try to help if you give me more context.",
-      "I'm here to assist you with library-related questions. Is there something specific about books, your account, or library services you'd like to know?",
-      "Thanks for asking! While I try to be helpful, for the most accurate information, our library staff at the front desk are always ready to assist you in person."
-    ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
   };
 
   const saveToLocalStorage = async (messagesToSave: Message[]) => {
@@ -297,24 +294,42 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
 
     // Simulate typing delay
     setTimeout(async () => {
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: generateResponse(messageText),
-        isUser: false,
-        timestamp: new Date(),
-      };
+      try {
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: await generateResponse(messageText),
+          isUser: false,
+          timestamp: new Date(),
+        };
 
-      // Update UI immediately
-      setMessages(prev => {
-        const updated = [...prev, botResponse];
-        saveToLocalStorage(updated);
-        return updated;
-      });
+        // Update UI immediately
+        setMessages(prev => {
+          const updated = [...prev, botResponse];
+          saveToLocalStorage(updated);
+          return updated;
+        });
 
-      // Save bot response to database
-      await saveMessageToDatabase(botResponse.text, false);
-      
-      setIsTyping(false);
+        // Save bot response to database
+        await saveMessageToDatabase(botResponse.text, false);
+      } catch (error) {
+        console.error('Error in sendVoiceMessage:', error);
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Sorry, I encountered an error. Please try again.',
+          isUser: false,
+          timestamp: new Date(),
+        };
+
+        setMessages(prev => {
+          const updated = [...prev, errorResponse];
+          saveToLocalStorage(updated);
+          return updated;
+        });
+
+        await saveMessageToDatabase(errorResponse.text, false);
+      } finally {
+        setIsTyping(false);
+      }
     }, 1500);
   };
 
@@ -346,25 +361,44 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
 
     // Simulate typing delay
     setTimeout(async () => {
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: generateResponse(messageText),
-        isUser: false,
-        timestamp: new Date(),
-        replyTo: userMessage
-      };
+      try {
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: await generateResponse(messageText),
+          isUser: false,
+          timestamp: new Date(),
+          replyTo: userMessage
+        };
 
-      // Update UI immediately
-      setMessages(prev => {
-        const updated = [...prev, botResponse];
-        saveToLocalStorage(updated);
-        return updated;
-      });
+        // Update UI immediately
+        setMessages(prev => {
+          const updated = [...prev, botResponse];
+          saveToLocalStorage(updated);
+          return updated;
+        });
 
-      // Save bot response to database
-      await saveMessageToDatabase(botResponse.text, false);
-      
-      setIsTyping(false);
+        // Save bot response to database
+        await saveMessageToDatabase(botResponse.text, false);
+      } catch (error) {
+        console.error('Error in sendMessage:', error);
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Sorry, I encountered an error. Please try again.',
+          isUser: false,
+          timestamp: new Date(),
+          replyTo: userMessage
+        };
+
+        setMessages(prev => {
+          const updated = [...prev, errorResponse];
+          saveToLocalStorage(updated);
+          return updated;
+        });
+
+        await saveMessageToDatabase(errorResponse.text, false);
+      } finally {
+        setIsTyping(false);
+      }
     }, 1500);
   };
 
@@ -494,6 +528,158 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
             </PanGestureHandler>
           );
         })} 
+
+        {/* Book Recommendations Display */}
+        {currentRecommendations.length > 0 && (
+          <View style={styles.recommendationsContainer}>
+            <Text style={styles.recommendationsTitle}>📚 Recommended for You</Text>
+            {currentRecommendations.map((book, index) => (
+              <TouchableOpacity
+                key={`rec-${index}`}
+                style={styles.recommendationCard}
+                onPress={() => {
+                  // Navigate to book details or add to conversation
+                  const bookQuery = `Tell me more about "${book.title}" by ${book.author}`;
+                  setInputText(bookQuery);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.recommendationContent}>
+                  <View style={styles.recommendationText}>
+                    <Text style={styles.recommendationBookTitle} numberOfLines={2}>
+                      {book.title}
+                    </Text>
+                    <Text style={styles.recommendationBookAuthor} numberOfLines={1}>
+                      by {book.author}
+                    </Text>
+                    <Text style={styles.recommendationBookCategory}>
+                      {book.category}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.recommendationAction}
+                    onPress={() => {
+                      const reserveQuery = `How can I reserve "${book.title}"?`;
+                      setInputText(reserveQuery);
+                    }}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={styles.recommendationActionText}>Reserve</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.clearRecommendations}
+              onPress={() => setCurrentRecommendations([])}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.clearRecommendationsText}>Hide recommendations</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Book Search Results Display */}
+        {currentSearchResults.length > 0 && (
+          <View style={styles.searchResultsContainer}>
+            <Text style={styles.searchResultsTitle}>🔍 Search Results</Text>
+            {currentSearchResults.map((book, index) => (
+              <TouchableOpacity
+                key={`search-${index}`}
+                style={styles.searchResultCard}
+                onPress={() => {
+                  const bookQuery = `Tell me more about "${book.title}" by ${book.author}`;
+                  setInputText(bookQuery);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.searchResultContent}>
+                  <View style={styles.searchResultText}>
+                    <Text style={styles.searchResultBookTitle} numberOfLines={2}>
+                      {book.title}
+                    </Text>
+                    <Text style={styles.searchResultBookAuthor} numberOfLines={1}>
+                      by {book.author}
+                    </Text>
+                    <Text style={styles.searchResultBookCategory}>
+                      {book.category}
+                    </Text>
+                    <Text style={styles.searchResultAvailability}>
+                      {book.available_copies} of {book.total_copies} available
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.searchResultAction}
+                    onPress={() => {
+                      const reserveQuery = `How can I reserve "${book.title}"?`;
+                      setInputText(reserveQuery);
+                    }}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={styles.searchResultActionText}>Reserve</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.clearSearchResults}
+              onPress={() => setCurrentSearchResults([])}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.clearSearchResultsText}>Hide search results</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Book Comparison Results Display */}
+        {currentComparisonResults.length > 0 && (
+          <View style={styles.comparisonResultsContainer}>
+            <Text style={styles.comparisonResultsTitle}>⚖️ Book Comparison</Text>
+            {currentComparisonResults.map((book, index) => (
+              <View key={`compare-${index}`} style={styles.comparisonResultCard}>
+                <View style={styles.comparisonResultHeader}>
+                  <Text style={styles.comparisonResultNumber}>{index + 1}</Text>
+                  <View style={styles.comparisonResultText}>
+                    <Text style={styles.comparisonResultBookTitle} numberOfLines={2}>
+                      {book.title}
+                    </Text>
+                    <Text style={styles.comparisonResultBookAuthor} numberOfLines={1}>
+                      by {book.author}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.comparisonResultDetails}>
+                  <Text style={styles.comparisonResultCategory}>
+                    📂 {book.category}
+                  </Text>
+                  <Text style={styles.comparisonResultDate}>
+                    📅 {book.publish_date || 'Unknown'}
+                  </Text>
+                  <Text style={styles.comparisonResultAvailability}>
+                    📊 {book.available_copies}/{book.total_copies} available
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.comparisonResultAction}
+                  onPress={() => {
+                    const compareQuery = `Compare "${book.title}" with the other books`;
+                    setInputText(compareQuery);
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.comparisonResultActionText}>Compare</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={styles.clearComparisonResults}
+              onPress={() => setCurrentComparisonResults([])}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.clearComparisonResultsText}>Hide comparison</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {isTyping && (
           <View style={[styles.messageContainer, styles.botMessage]}>
@@ -692,4 +878,263 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingVertical: 0,
   } as ViewStyle,
+
+  // Recommendations Styles
+  recommendationsContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
+
+  recommendationsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  recommendationCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  recommendationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  recommendationText: {
+    flex: 1,
+  },
+
+  recommendationBookTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+
+  recommendationBookAuthor: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginBottom: 2,
+  },
+
+  recommendationBookCategory: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+
+  recommendationAction: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  recommendationActionText: {
+    color: colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  clearRecommendations: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+
+  clearRecommendationsText: {
+    fontSize: 14,
+    color: colors.text.muted,
+    textDecorationLine: 'underline',
+  },
+
+  // Search Results Styles
+  searchResultsContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
+
+  searchResultsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  searchResultCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  searchResultContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  searchResultText: {
+    flex: 1,
+  },
+
+  searchResultBookTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+
+  searchResultBookAuthor: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginBottom: 2,
+  },
+
+  searchResultBookCategory: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+
+  searchResultAvailability: {
+    fontSize: 12,
+    color: colors.success,
+    fontWeight: '500',
+  },
+
+  searchResultAction: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  searchResultActionText: {
+    color: colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  clearSearchResults: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+
+  clearSearchResultsText: {
+    fontSize: 14,
+    color: colors.text.muted,
+    textDecorationLine: 'underline',
+  },
+
+  // Comparison Results Styles
+  comparisonResultsContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+  },
+
+  comparisonResultsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  comparisonResultCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  comparisonResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+
+  comparisonResultNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginRight: 12,
+    minWidth: 24,
+  },
+
+  comparisonResultText: {
+    flex: 1,
+  },
+
+  comparisonResultBookTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+
+  comparisonResultBookAuthor: {
+    fontSize: 14,
+    color: colors.text.secondary,
+  },
+
+  comparisonResultDetails: {
+    marginBottom: 12,
+  },
+
+  comparisonResultCategory: {
+    fontSize: 14,
+    color: colors.primary,
+    marginBottom: 4,
+  },
+
+  comparisonResultDate: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginBottom: 4,
+  },
+
+  comparisonResultAvailability: {
+    fontSize: 14,
+    color: colors.success,
+  },
+
+  comparisonResultAction: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+
+  comparisonResultActionText: {
+    color: colors.text.inverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  clearComparisonResults: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+
+  clearComparisonResultsText: {
+    fontSize: 14,
+    color: colors.text.muted,
+    textDecorationLine: 'underline',
+  },
 });
