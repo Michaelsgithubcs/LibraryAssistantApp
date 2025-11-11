@@ -636,15 +636,15 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
       <View style={styles.inputContainer}>
         <Card style={styles.inputCard}>
           {replyingTo && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-              <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, paddingHorizontal: 4 }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={[commonStyles.textMuted, { fontSize: 12 }]}>Replying to:</Text>
                 <Text style={[commonStyles.textMuted, { fontSize: 12, fontStyle: 'italic' }]} numberOfLines={2}>{replyingTo.text}</Text>
               </View>
               <Button
                 title="Cancel"
                 variant="outline"
-                style={{ marginLeft: 8, height: 28, minHeight: 28, paddingHorizontal: 10 }}
+                style={{ height: 40, minHeight: 40, paddingHorizontal: 8, paddingVertical: 4 }}
                 textStyle={{ fontSize: 12 }}
                 onPress={() => setReplyingTo(null)}
               />
