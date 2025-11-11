@@ -63,7 +63,7 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
       headerRight: () => (
         <TouchableOpacity
           onPress={() => setShowThemeSettings(true)}
-          style={{ marginRight: 40, padding: 4 }}
+          style={{ marginRight: 15, padding: 4 }}
         >
           <Image
             source={require('../../assets/theme.png')}
