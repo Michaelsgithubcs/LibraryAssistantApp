@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   },
   
   inputContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 60 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 5 : 2,
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
