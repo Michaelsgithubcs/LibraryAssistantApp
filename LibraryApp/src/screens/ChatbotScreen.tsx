@@ -410,8 +410,8 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   return (
     <KeyboardAvoidingView 
       style={commonStyles.container} 
-      behavior="height"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
     >
       <ScrollView 
         ref={scrollViewRef}
@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
   },
   
   inputContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 5 : 2,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
     backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
