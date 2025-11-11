@@ -20,6 +20,7 @@ export const useAuth = () => {
 
   const loadUser = async () => {
     try {
+      console.log('Loading user from AsyncStorage...');
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         try {
@@ -47,25 +48,8 @@ export const useAuth = () => {
       console.error('Error loading user:', error);
       setUser(null);
     } finally {
+      console.log('Setting loading to false');
       setLoading(false);
-      
-      // Double-check for consistency after a short delay
-      setTimeout(() => {
-        AsyncStorage.getItem('user').then(userData => {
-          const isLoggedInState = !!user;
-          const isLoggedInStorage = !!userData;
-          
-          if (isLoggedInState !== isLoggedInStorage) {
-            console.log('Inconsistency detected between state and storage, fixing...');
-            if (isLoggedInStorage && userData) {
-              setUser(JSON.parse(userData));
-            } else {
-              setUser(null);
-            }
-            updateAuthState();
-          }
-        }).catch(err => console.error('Error in consistency check:', err));
-      }, 500);
     }
   };
 

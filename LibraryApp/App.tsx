@@ -394,34 +394,9 @@ const AppContent = () => {
   React.useEffect(() => {
     if (prevUserRef.current !== user) {
       console.log('User state changed:', user ? 'Logged in' : 'Logged out');
-      
-      // Navigate programmatically when auth state changes
-      if (navigationRef.current) {
-        console.log('Navigation ref exists, current route:', navigationRef.current.getCurrentRoute()?.name);
-        if (user) {
-          console.log('Navigating to Main screen after login');
-          try {
-            navigationRef.current.navigate('Main');
-            console.log('Navigation call completed');
-          } catch (error) {
-            console.error('Navigation error:', error);
-          }
-        } else {
-          console.log('Navigating to Login screen after logout');
-          try {
-            navigationRef.current.navigate('Login');
-            console.log('Navigation call completed');
-          } catch (error) {
-            console.error('Navigation error:', error);
-          }
-        }
-      } else {
-        console.log('Navigation ref is null');
-      }
-      
       prevUserRef.current = user;
     }
-  }, [user, authStateVersion]); // Add authStateVersion to dependencies
+  }, [user]);
   
   // Create a ref to hold the notification service
   const notificationServiceRef = React.useRef<any>(null);
@@ -448,7 +423,7 @@ const AppContent = () => {
       appStateSubscription.remove();
     };
   }, []);
-
+  
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -459,7 +434,7 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer ref={navigationRef}>
+      <NavigationContainer ref={navigationRef} key={`nav-${authStateVersion}`}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator 
           screenOptions={{ headerShown: false }}
