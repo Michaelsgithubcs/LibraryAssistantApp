@@ -311,7 +311,13 @@ export const BookChatScreen: React.FC<BookChatScreenProps> = ({ route, navigatio
           : m
       )
     );
-    // ...existing code...
+    
+    // Clear transcribing state immediately after replacing text
+    setIsTranscribing(false);
+    setTranscribingMessageId(null);
+
+    // Send the transcribed text to the AI (will be saved to database)
+    await sendVoiceMessage(transcribedText);
   };
 
   const sendVoiceMessage = async (messageText: string) => {
