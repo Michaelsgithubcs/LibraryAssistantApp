@@ -219,7 +219,7 @@ const TabNavigator = ({ user }: { user: any }) => {
         options={{ 
           title: 'Notifications',
           tabBarLabel: () => (
-            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Notifications</Text>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>Notifs</Text>
           ),
           tabBarIcon: ({ size, focused }) => (
             <NotificationTabIcon size={size} focused={focused} />
@@ -339,42 +339,42 @@ const MainNavigator = ({ user }: { user: any }) => {
       </Stack.Screen>
       <Stack.Screen 
         name="BookChat" 
-        options={{ title: 'Book Discussion' }}
+        options={{ title: 'Book Discussion', headerBackTitle: '' }}
         component={BookChatScreen as any}
       />
       <Stack.Screen 
         name="EbookStore" 
-        options={{ title: 'Ebook Store' }}
+        options={{ title: 'Ebook Store', headerBackTitle: '' }}
       >
         {(props) => <EbookStoreScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="Chatbot" 
-        options={{ title: 'Library Assistant' }}
+        options={{ title: 'Library Assistant', headerBackTitle: '' }}
       >
         {(props) => <ChatbotScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="OverdueBooks" 
-        options={{ title: 'Overdue Books' }}
+        options={{ title: 'Overdue Books', headerBackTitle: '' }}
       >
         {(props) => <OverdueBooksScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="Fines" 
-        options={{ title: 'My Fines' }}
+        options={{ title: 'My Fines', headerBackTitle: '' }}
       >
         {(props) => <FinesScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="Reservations" 
-        options={{ title: 'Reservations' }}
+        options={{ title: 'Reservations', headerBackTitle: '' }}
       >
         {(props) => <ReservationsScreen {...props} user={user} />}
       </Stack.Screen>
       <Stack.Screen 
         name="BorrowedBooks" 
-        options={{ title: 'Books Borrowed' }}
+        options={{ title: 'Books Borrowed', headerBackTitle: '' }}
       >
         {(props) => <BorrowedBooksScreen {...props} user={user} />}
       </Stack.Screen>
