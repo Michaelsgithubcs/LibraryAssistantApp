@@ -436,7 +436,7 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer ref={navigationRef} key={user ? 'logged-in' : 'logged-out'}>
+      <NavigationContainer ref={navigationRef}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator 
           screenOptions={{ headerShown: false }}

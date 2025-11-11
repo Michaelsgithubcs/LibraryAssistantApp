@@ -46,8 +46,23 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
       // Set loading to false after successful login
       setLoading(false);
       
-      // Navigation will be handled automatically by auth state change
-      console.log("Auth state updated, navigation should happen automatically");
+      // Navigate to main screen with a small delay to ensure state is updated
+      console.log("Navigating to Main screen after login");
+      setTimeout(() => {
+        try {
+          if (navigation) {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Main' }],
+            });
+            console.log("Navigation reset to Main completed");
+          } else {
+            console.log("Navigation prop not available");
+          }
+        } catch (error) {
+          console.error("Navigation error in LoginScreen:", error);
+        }
+      }, 200);
       
     } catch (error) {
       console.error("Login error:", error);
