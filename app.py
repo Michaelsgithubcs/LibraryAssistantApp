@@ -2027,8 +2027,8 @@ def ai_book_assistant():
     try:
         import requests as req
         
-        # Use REST API directly with gemini-2.0-flash (available model)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GENAI_API_KEY}"
+        # Use REST API directly with gemini-1.5-flash (available model)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GENAI_API_KEY}"
         
         payload = {
             "contents": [{
@@ -2197,8 +2197,8 @@ def ai_book_assistant_v2():
             print("Sending request to Gemini API...")
             import requests as req
             
-            # Use REST API directly with gemini-2.0-flash (available model)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+            # Use REST API directly with gemini-1.5-flash (available model)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
             
             full_prompt = f"{system_prompt}\n\n{user_prompt}"
             payload = {
