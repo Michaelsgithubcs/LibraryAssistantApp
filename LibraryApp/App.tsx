@@ -391,6 +391,8 @@ const AppContent = () => {
   // Track previous auth state to detect changes
   const prevUserRef = React.useRef(user);
   
+  console.log('AppContent render - user:', !!user, 'loading:', loading);
+  
   React.useEffect(() => {
     if (prevUserRef.current !== user) {
       console.log('User state changed:', user ? 'Logged in' : 'Logged out');
@@ -434,7 +436,7 @@ const AppContent = () => {
 
   return (
     <NotificationProvider>
-      <NavigationContainer ref={navigationRef} key={`nav-${authStateVersion}`}>
+      <NavigationContainer ref={navigationRef} key={user ? 'logged-in' : 'logged-out'}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <Stack.Navigator 
           screenOptions={{ headerShown: false }}

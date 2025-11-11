@@ -25,9 +25,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
       return;
     }
 
+    console.log("Starting login process...");
     setLoading(true);
     try {
+      console.log("Calling API login...");
       const userData = await apiClient.login(email, password);
+      console.log("API login successful, userData:", userData);
       
       if (userData.role !== 'user') {
         Alert.alert('Access Denied', 'This app is for library users only. Please use the web interface for admin access.');
@@ -43,20 +46,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, navigation })
       // Set loading to false after successful login
       setLoading(false);
       
-      // Navigate to main screen immediately
-      console.log("Attempting to navigate to Main screen");
-      try {
-        if (navigation) {
-          navigation.navigate('Main');
-          console.log("Navigation to Main completed");
-        } else {
-          console.log("Navigation prop not available");
-        }
-      } catch (error) {
-        console.error("Navigation error in LoginScreen:", error);
-      }
+      // Navigation will be handled automatically by auth state change
+      console.log("Auth state updated, navigation should happen automatically");
       
     } catch (error) {
+      console.error("Login error:", error);
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'Invalid credentials');
       setLoading(false);
     }

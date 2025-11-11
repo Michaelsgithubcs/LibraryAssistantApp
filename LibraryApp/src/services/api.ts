@@ -6,22 +6,44 @@ export const API_BASE = 'https://libraryassistantapp.onrender.com/api';
 
 export const apiClient = {
   async login(email: string, password: string): Promise<User> {
-    const response = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: email, password })
-    });
+    console.log('API: Starting login request to:', `${API_BASE}/auth/login`);
     
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Login failed');
-    }
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('API: Login request timed out');
+      controller.abort();
+    }, 10000); // 10 second timeout
     
-    const data = await response.json();
-    if (data.id) {
-      await AsyncStorage.setItem('user', JSON.stringify(data));
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: email, password }),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('API: Login response status:', response.status);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('API: Login failed with error:', error);
+        throw new Error(error.error || 'Login failed');
+      }
+      
+      const data = await response.json();
+      console.log('API: Login successful, user data received');
+      
+      if (data.id) {
+        await AsyncStorage.setItem('user', JSON.stringify(data));
+      }
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('API: Login request failed:', error);
+      throw error;
     }
-    return data;
   },
 
   async getBooks(): Promise<Book[]> {
