@@ -30,8 +30,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
       launchOptions: launchOptions
     )
 
-    // Configure push notifications
-    self.configurePushNotifications()
+    // Configure push notifications (only if entitlement is available)
+    if Bundle.main.object(forInfoDictionaryKey: "aps-environment") != nil {
+      self.configurePushNotifications()
+    } else {
+      print("Push notifications not available - skipping configuration")
+    }
 
     return true
   }
@@ -47,8 +51,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     UIApplication.shared.registerForRemoteNotifications()
   }
 
-  // Handle device token registration
+  // Handle device token registration (only if push notifications are enabled)
   func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    guard Bundle.main.object(forInfoDictionaryKey: "aps-environment") != nil else { return }
+    
     let tokenParts = deviceToken.map { data in String(format: "%02.2hhx", data) }
     let token = tokenParts.joined()
     print("Device Token: \(token)")
@@ -57,18 +63,30 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     NotificationCenter.default.post(name: Notification.Name("RemoteNotificationToken"), object: nil, userInfo: ["token": token])
   }
 
-  // Handle registration error
+  // Handle registration error (only if push notifications are enabled)
   func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    guard Bundle.main.object(forInfoDictionaryKey: "aps-environment") != nil else { return }
+    
     print("Failed to register for remote notifications: \(error)")
   }
 
-  // Handle notification when app is in foreground
+  // Handle notification when app is in foreground (only if push notifications are enabled)
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    guard Bundle.main.object(forInfoDictionaryKey: "aps-environment") != nil else { 
+      completionHandler([])
+      return
+    }
+    
     completionHandler([.alert, .sound, .badge])
   }
 
-  // Handle notification tap
+  // Handle notification tap (only if push notifications are enabled)
   func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+    guard Bundle.main.object(forInfoDictionaryKey: "aps-environment") != nil else { 
+      completionHandler()
+      return
+    }
+    
     completionHandler()
   }
 }

@@ -410,12 +410,15 @@ export const ChatbotScreen: React.FC<ChatbotScreenProps> = ({ user, navigation }
   return (
     <KeyboardAvoidingView 
       style={commonStyles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="height"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
       <ScrollView 
         ref={scrollViewRef}
         style={styles.messagesContainer}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Rendering messages: {messages.length} */}
         {messages.map((message, idx) => {
@@ -756,6 +759,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  
   messageContainer: {
     marginVertical: 4,
     marginHorizontal: 16,
@@ -810,8 +818,10 @@ const styles = StyleSheet.create({
   },
   
   inputContainer: {
-    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 60 : 20,
     backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   
   inputCard: {
