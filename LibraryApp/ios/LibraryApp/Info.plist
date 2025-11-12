@@ -35,6 +35,8 @@
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to your microphone to transcribe voice messages for the book chat assistant.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>This app uses motion detection to provide quick access to the library assistant when you shake your device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app needs access to speech recognition to convert your voice to text for easier chatting with the book assistant.</string>
 	<key>NSUserNotificationsUsageDescription</key>

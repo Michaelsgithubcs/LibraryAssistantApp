@@ -14,6 +14,8 @@ import BellIconFilled from './assets/icons/notifications-clicked.svg';
 import MoreIcon from './assets/icons/more.svg';
 import MoreIconFilled from './assets/icons/more-clicked.svg';
 
+console.log('🚨🚨🚨 APP STARTED - SHAKE DETECTION SHOULD WORK 🚨🚨🚨');
+
 import { Provider } from 'react-redux';
 import { store } from './src/store';
 import { useAuth } from './src/hooks/useAuth';
@@ -40,6 +42,7 @@ import { ReservationsScreen } from './src/screens/ReservationsScreen';
 
 import { colors } from './src/styles/colors';
 import { useDispatch, useSelector } from 'react-redux';
+import { useShakeNavigation } from './src/hooks/useShakeNavigation';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -261,125 +264,84 @@ const MainNavigator = ({ user }: { user: any }) => {
       </View>
     );
   }
-  const dispatch = useDispatch();
-  const previousNotificationIds = React.useRef<Set<number>>(new Set());
-
-  // Global notification polling - works across all screens
-  React.useEffect(() => {
-    if (!user) return;
-
-    const pollNotifications = async () => {
-      try {
-        const { notificationApi } = await import('./src/services/api');
-        const NotificationService = require('./src/services/NotificationService').default;
-        const { setUnreadCount } = await import('./src/store/slices/notificationSlice');
-        
-        const list = await notificationApi.getUserNotifications(user.id);
-        const unread = Array.isArray(list) ? list.filter((n: any) => n.is_read === 0).length : 0;
-        dispatch(setUnreadCount(unread));
-        
-        // Check for new notifications and trigger push notifications
-        if (Array.isArray(list)) {
-          const isFirstLoad = previousNotificationIds.current.size === 0;
-          
-          list.forEach((notification: any) => {
-            const notifId = notification.id;
-            
-            if (!previousNotificationIds.current.has(notifId)) {
-              previousNotificationIds.current.add(notifId);
-              
-              // Only trigger push notification if this is NOT the first load
-              if (!isFirstLoad) {
-                NotificationService.showLocalNotification({
-                  title: notification.title || 'Library Notification',
-                  message: notification.message || '',
-                  data: {
-                    type: notification.type || 'info',
-                    notificationId: notifId,
-                    ...(notification.data ? JSON.parse(notification.data) : {})
-                  }
-                });
-                
-                console.log(`🔔 Push notification sent: ${notification.title}`);
-              }
-            }
-          });
-        }
-      } catch (e) {
-        console.log('Error polling notifications:', e);
-      }
-    };
-
-    // Poll immediately on mount
-    pollNotifications();
-
-    // Then poll every 5 seconds
-    const interval = setInterval(pollNotifications, 5000);
-
-    return () => clearInterval(interval);
-  }, [user, dispatch]);
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: colors.primary,
-          elevation: 0,
-          shadowOpacity: 0,
-        },
-        headerTintColor: colors.text.inverse,
-        headerTitleStyle: { fontWeight: 'bold' },
-      }}
-    >
-      <Stack.Screen 
-        name="MainTabs" 
-        options={{ headerShown: false }}
+    <>
+      <ShakeNavigationHandler user={user} />
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          headerTintColor: colors.text.inverse,
+          headerTitleStyle: { fontWeight: 'bold' },
+        }}
       >
-        {() => <TabNavigator user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="BookChat" 
-        options={{ title: 'Book Discussion', headerBackTitle: '' }}
-        component={BookChatScreen as any}
-      />
-      <Stack.Screen 
-        name="EbookStore" 
-        options={{ title: 'Ebook Store', headerBackTitle: '' }}
-      >
-        {(props) => <EbookStoreScreen {...props} user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="Chatbot" 
-        options={{ title: 'Library Assistant', headerBackTitle: '' }}
-      >
-        {(props) => <ChatbotScreen {...props} user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="OverdueBooks" 
-        options={{ title: 'Overdue Books', headerBackTitle: '' }}
-      >
-        {(props) => <OverdueBooksScreen {...props} user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="Fines" 
-        options={{ title: 'My Fines', headerBackTitle: '' }}
-      >
-        {(props) => <FinesScreen {...props} user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="Reservations" 
-        options={{ title: 'Reservations', headerBackTitle: '' }}
-      >
-        {(props) => <ReservationsScreen {...props} user={user} />}
-      </Stack.Screen>
-      <Stack.Screen 
-        name="BorrowedBooks" 
-        options={{ title: 'Books Borrowed', headerBackTitle: '' }}
-      >
-        {(props) => <BorrowedBooksScreen {...props} user={user} />}
-      </Stack.Screen>
-    </Stack.Navigator>
+        <Stack.Screen 
+          name="MainTabs" 
+          options={{ headerShown: false }}
+        >
+          {() => <TabNavigator user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="BookChat" 
+          options={{ title: 'Book Discussion', headerBackTitle: '' }}
+          component={BookChatScreen as any}
+        />
+        <Stack.Screen 
+          name="EbookStore" 
+          options={{ title: 'Ebook Store', headerBackTitle: '' }}
+        >
+          {(props) => <EbookStoreScreen {...props} user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="Chatbot" 
+          options={{ title: 'Library Assistant', headerBackTitle: '' }}
+        >
+          {(props) => <ChatbotScreen {...props} user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="OverdueBooks" 
+          options={{ title: 'Overdue Books', headerBackTitle: '' }}
+        >
+          {(props) => <OverdueBooksScreen {...props} user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="Fines" 
+          options={{ title: 'My Fines', headerBackTitle: '' }}
+        >
+          {(props) => <FinesScreen {...props} user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="Reservations" 
+          options={{ title: 'Reservations', headerBackTitle: '' }}
+        >
+          {(props) => <ReservationsScreen {...props} user={user} />}
+        </Stack.Screen>
+        <Stack.Screen 
+          name="BorrowedBooks" 
+          options={{ title: 'Books Borrowed', headerBackTitle: '' }}
+        >
+          {(props) => <BorrowedBooksScreen {...props} user={user} />}
+        </Stack.Screen>
+      </Stack.Navigator>
+    </>
   );
+};
+
+// Component to handle shake navigation within navigation context
+const ShakeNavigationHandler = ({ user }: { user: any }) => {
+  console.log('🚨 SHAKE HANDLER RENDERED - User logged in:', !!user);
+
+  useShakeNavigation({
+    enabled: !!user, // Only enable when user is logged in
+    targetScreen: 'Chatbot', // Navigate to chatbot screen
+    showConfirmation: false // Direct navigation for better UX
+  });
+
+  return null;
 };
 
 const AppContent = () => {

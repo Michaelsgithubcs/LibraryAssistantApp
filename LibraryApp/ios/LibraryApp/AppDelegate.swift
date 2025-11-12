@@ -4,6 +4,18 @@ import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import UserNotifications
 
+// Custom window class to enable both dev menu and library assistant on shake
+class CustomWindow: UIWindow {
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        if motion == .motionShake {
+            // Post the notification for our custom shake detection
+            NotificationCenter.default.post(name: NSNotification.Name("RCTShowDevMenuNotification"), object: nil)
+        }
+        // Call super to allow React Native's dev menu shake to work
+        super.motionEnded(motion, with: event)
+    }
+}
+
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
   var window: UIWindow?
@@ -22,7 +34,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    window = UIWindow(frame: UIScreen.main.bounds)
+    window = CustomWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
       withModuleName: "LibraryApp",
