@@ -27,24 +27,32 @@ interface Ebook {
 
 export const EbookStoreScreen: React.FC<EbookStoreScreenProps> = ({ user, navigation }) => {
   const [ebooks, setEbooks] = useState<Ebook[]>([]);
-  const [searchTerm, setSearchTerm] = useState('fiction');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchEbooks();
+    if (!searchTerm) {
+      fetchEbooks('popular');
+    } else {
+      fetchEbooks();
+    }
   }, []);
 
   // Refresh ebooks when screen/tab is focused
   useFocusEffect(
     React.useCallback(() => {
-      fetchEbooks();
+      if (!searchTerm) {
+        fetchEbooks('popular');
+      } else {
+        fetchEbooks();
+      }
     }, [searchTerm])
   );
 
-  const fetchEbooks = async () => {
+  const fetchEbooks = async (defaultQuery?: string) => {
     try {
-      const query = searchTerm || 'fiction';
+      const query = searchTerm || defaultQuery || '';
       console.log(`Fetching ebooks with query: ${query}`);
       
       // Using a CORS proxy to avoid network issues
