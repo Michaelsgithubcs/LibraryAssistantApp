@@ -225,14 +225,16 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
         {/* Search Interface */}
         <Card>
           <Text style={[commonStyles.subtitle, {marginBottom: 8}]}>Search Library</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ position: 'relative', marginBottom: 8 }}>
             <Input
               placeholder="Search by title or author..."
               value={searchTerm}
               onChangeText={handleSearch}
-              style={{ flex: 1, marginBottom: 0 }}
+              style={{ marginBottom: 0 }}
             />
-            <BookScanner onTextExtracted={handleTextExtracted} onBooksFound={handleBooksFound} />
+            <View style={{ position: 'absolute', right: 12, top: '50%', transform: [{ translateY: -18 }] }}>
+              <BookScanner onTextExtracted={handleTextExtracted} onBooksFound={handleBooksFound} />
+            </View>
           </View>
           
           <ScrollView 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import TextRecognition from 'react-native-text-recognition';
 import { colors } from '../styles/colors';
@@ -160,31 +160,28 @@ export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, onBoo
       style={[styles.scannerButton, style]}
       disabled={isProcessing}
     >
-      <Text style={styles.scannerIcon}>📷</Text>
+      <Image source={require('../../assets/icons/scanner.png')} style={styles.scannerIcon} />
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   scannerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
   },
   scannerIcon: {
-    fontSize: 20,
-    color: colors.text.inverse,
+    width: 20,
+    height: 20,
+    tintColor: '#000000',
   },
   processingContainer: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
   },
   processingText: {
     fontSize: 10,
