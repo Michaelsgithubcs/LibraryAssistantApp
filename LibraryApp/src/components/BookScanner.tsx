@@ -3,13 +3,15 @@ import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } fr
 import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import TextRecognition from 'react-native-text-recognition';
 import { colors } from '../styles/colors';
+import { bookTextProcessor, BookSearchResult } from '../utils/bookTextProcessor';
 
 interface BookScannerProps {
   onTextExtracted: (text: string) => void;
+  onBooksFound?: (books: BookSearchResult[]) => void;
   style?: any;
 }
 
-export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, style }) => {
+export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, onBooksFound, style }) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   console.log('📷 BookScanner initialized, TextRecognition available:', !!TextRecognition);
@@ -43,8 +45,43 @@ export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, style
         return;
       }
 
-      // Pass the extracted text back to parent
-      onTextExtracted(extractedText);
+      // Use Gemini AI-powered intelligent book search
+      console.log('🤖 Running Gemini AI-powered book search...');
+      const searchResults = await bookTextProcessor.searchBooksSmart(extractedText);
+
+      console.log('📚 Gemini AI search results:', searchResults);
+
+      if (searchResults.length > 0) {
+        // Gemini AI found books! Use the best match for the search field
+        const bestMatch = searchResults[0];
+        const searchText = bestMatch.title; // Gemini AI already extracted just the title
+
+        if (onTextExtracted) {
+          onTextExtracted(searchText);
+        }
+
+        if (onBooksFound) {
+          onBooksFound(searchResults);
+        }
+
+        Alert.alert(
+          'Book Found! 🎉',
+          `Gemini AI extracted title "${bestMatch.title}" and found it in your library!\n\nSearching your library...`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        // Gemini AI couldn't find books, but we can still show the extracted text
+        console.log('📖 Gemini AI search found no matches, using raw text for search');
+        if (onTextExtracted) {
+          onTextExtracted(extractedText);
+        }
+
+        Alert.alert(
+          'Text Extracted',
+          `Couldn't identify a book title from the scan.\n\nSearching with extracted text: "${extractedText.substring(0, 50)}${extractedText.length > 50 ? '...' : ''}"`,
+          [{ text: 'OK' }]
+        );
+      }
 
     } catch (error) {
       console.error('📷 OCR Error:', error);

@@ -13,6 +13,7 @@ import { User, Book, ReservationStatus, IssuedBook } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
 import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 import { BookScanner } from '../components/BookScanner';
+import { bookTextProcessor, BookSearchResult } from '../utils/bookTextProcessor';
 
 interface MyBooksScreenProps {
   user: User;
@@ -72,6 +73,16 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
     setSearchTerm(extractedText);
     // Trigger search automatically
     filterBooks(extractedText, selectedCategory);
+  };
+
+  const handleBooksFound = (foundBooks: BookSearchResult[]) => {
+    console.log('📚 Books found from scan:', foundBooks);
+    if (foundBooks.length > 0) {
+      // Books are already being searched by the BookScanner component
+      // This callback is for additional UI updates or notifications if needed
+      const bestMatch = foundBooks[0];
+      console.log('📚 Best match found:', bestMatch.title, 'by', bestMatch.author);
+    }
   };
 
   const handleCategoryFilter = (category: string) => {
@@ -221,7 +232,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
               onChangeText={handleSearch}
               style={{ flex: 1, marginBottom: 0 }}
             />
-            <BookScanner onTextExtracted={handleTextExtracted} />
+            <BookScanner onTextExtracted={handleTextExtracted} onBooksFound={handleBooksFound} />
           </View>
           
           <ScrollView 
