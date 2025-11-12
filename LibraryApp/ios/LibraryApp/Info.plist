@@ -35,6 +35,10 @@
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to your microphone to transcribe voice messages for the book chat assistant.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to scan book covers and extract text for searching the library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs photo library access to select book images for scanning and searching.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>This app uses motion detection to provide quick access to the library assistant when you shake your device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

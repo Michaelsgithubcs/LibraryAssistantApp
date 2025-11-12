@@ -1,0 +1,157 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
+import TextRecognition from 'react-native-text-recognition';
+import { colors } from '../styles/colors';
+
+interface BookScannerProps {
+  onTextExtracted: (text: string) => void;
+  style?: any;
+}
+
+export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, style }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  console.log('📷 BookScanner initialized, TextRecognition available:', !!TextRecognition);
+
+  const processImage = async (imageUri: string) => {
+    try {
+      setIsProcessing(true);
+
+      console.log('📷 Starting OCR processing for:', imageUri);
+
+      if (!TextRecognition) {
+        throw new Error('OCR library not available');
+      }
+
+      // Perform OCR on the image
+      const result = await TextRecognition.recognize(imageUri);
+
+      console.log('📷 OCR raw result:', result);
+
+      // Extract all text from the result
+      const extractedText = Array.isArray(result) ? result.join(' ').trim() : String(result).trim();
+
+      console.log('📷 OCR Result:', extractedText);
+
+      if (!extractedText || extractedText.length < 3) {
+        Alert.alert(
+          'No Text Found',
+          'Could not extract readable text from the image. Please try a clearer photo of the book cover or title.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Pass the extracted text back to parent
+      onTextExtracted(extractedText);
+
+    } catch (error) {
+      console.error('📷 OCR Error:', error);
+      Alert.alert(
+        'Scan Failed',
+        'Failed to process the image. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const openCamera = () => {
+    const options = {
+      mediaType: 'photo' as MediaType,
+      quality: 0.8 as const,
+      includeBase64: false,
+    };
+
+    launchCamera(options, (response: ImagePickerResponse) => {
+      if (response.didCancel) return;
+      if (response.errorMessage) {
+        Alert.alert('Camera Error', response.errorMessage);
+        return;
+      }
+      if (response.assets && response.assets[0].uri) {
+        processImage(response.assets[0].uri);
+      }
+    });
+  };
+
+  const openGallery = () => {
+    const options = {
+      mediaType: 'photo' as MediaType,
+      quality: 0.8 as const,
+      includeBase64: false,
+    };
+
+    launchImageLibrary(options, (response: ImagePickerResponse) => {
+      if (response.didCancel) return;
+      if (response.errorMessage) {
+        Alert.alert('Gallery Error', response.errorMessage);
+        return;
+      }
+      if (response.assets && response.assets[0].uri) {
+        processImage(response.assets[0].uri);
+      }
+    });
+  };
+
+  const showOptions = () => {
+    Alert.alert(
+      'Scan Book',
+      'Choose how to scan the book',
+      [
+        { text: '📸 Take Photo', onPress: openCamera },
+        { text: '🖼️ Choose from Gallery', onPress: openGallery },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  if (isProcessing) {
+    return (
+      <View style={[styles.processingContainer, style]}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={styles.processingText}>Scanning...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={showOptions}
+      style={[styles.scannerButton, style]}
+      disabled={isProcessing}
+    >
+      <Text style={styles.scannerIcon}>📷</Text>
+    </TouchableOpacity>
+  );
+};
+
+const styles = StyleSheet.create({
+  scannerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  scannerIcon: {
+    fontSize: 20,
+    color: colors.text.inverse,
+  },
+  processingContainer: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  processingText: {
+    fontSize: 10,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+});

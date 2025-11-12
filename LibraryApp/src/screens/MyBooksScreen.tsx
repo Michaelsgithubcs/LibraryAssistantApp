@@ -12,6 +12,7 @@ import { commonStyles } from '../styles/common';
 import { User, Book, ReservationStatus, IssuedBook } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
 import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
+import { BookScanner } from '../components/BookScanner';
 
 interface MyBooksScreenProps {
   user: User;
@@ -64,6 +65,13 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
   const handleSearch = (text: string) => {
     setSearchTerm(text);
     filterBooks(text, selectedCategory);
+  };
+
+  const handleTextExtracted = (extractedText: string) => {
+    console.log('📖 Book scan result:', extractedText);
+    setSearchTerm(extractedText);
+    // Trigger search automatically
+    filterBooks(extractedText, selectedCategory);
   };
 
   const handleCategoryFilter = (category: string) => {
@@ -206,12 +214,15 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
         {/* Search Interface */}
         <Card>
           <Text style={[commonStyles.subtitle, {marginBottom: 8}]}>Search Library</Text>
-          <Input
-            placeholder="Search by title or author..."
-            value={searchTerm}
-            onChangeText={handleSearch}
-            style={{marginBottom: 16}}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Input
+              placeholder="Search by title or author..."
+              value={searchTerm}
+              onChangeText={handleSearch}
+              style={{ flex: 1, marginBottom: 0 }}
+            />
+            <BookScanner onTextExtracted={handleTextExtracted} />
+          </View>
           
           <ScrollView 
             horizontal 
