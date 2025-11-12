@@ -84,6 +84,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       fetchDashboardData();
       checkForNewNotifications();
       refreshUnreadCount();
+      // Reload ML recommendations when coming back to dashboard
+      loadMLRecommendations();
     }, [])
   );
   
@@ -123,53 +125,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Update reservations
       setUserReservations(reservations);
 
-      // Only set fallback recommendations if ML recommendations aren't loaded yet
-      if (!recommendationsLoaded) {
-        console.log("No ML recommendations loaded yet, using fallback recommendations");
-        
-        // Get all books for fallback recommendations
-        const allBooks = await apiClient.getBooks();
-        
-        // Update recommended books with fallback
-        if (allBooks && allBooks.length > 0) {
-          // Get 3 random books as recommendations
-          const shuffled = [...allBooks].sort(() => 0.5 - Math.random());
-          const validRecommendations: Book[] = shuffled.slice(0, 3).map(book => ({
-            ...book,
-            isbn: book.isbn || '',
-            description: book.description || '',
-            availableCopies: book.availableCopies || 0,
-            totalCopies: book.totalCopies || 1,
-            publishDate: book.publishDate || new Date().toISOString().split('T')[0],
-            estimatedTime: book.estimatedTime || 0,
-            coverImage: book.coverImage || 'https://via.placeholder.com/150',
-            reading_time_minutes: book.reading_time_minutes || 0
-          }));
-          setRecommendedBooks(validRecommendations);
-        } else {
-          // Fallback to default books if no recommendations
-          const defaultBooks: Book[] = [
-            {
-              id: '1',
-              title: 'The Great Gatsby',
-              author: 'F. Scott Fitzgerald',
-              isbn: '9780743273565',
-              category: 'Classic',
-              description: 'A story of decadence and excess in the Jazz Age',
-              availableCopies: 5,
-              totalCopies: 10,
-              publishDate: '1925-04-10',
-              estimatedTime: 4,
-              coverImage: 'https://via.placeholder.com/150',
-              reading_time_minutes: 240
-            },
-            // ... other default books
-          ];
-          setRecommendedBooks(defaultBooks);
-        }
-      } else {
-        console.log("ML recommendations already loaded, preserving them");
-      }
+      // Note: ML recommendations are now loaded separately in useFocusEffect
+      // Don't set fallback recommendations here to avoid conflicts
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
