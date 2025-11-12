@@ -118,7 +118,7 @@ export const MoreScreen: React.FC<MoreScreenProps> = ({ user, navigation }) => {
       <Card>
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
-            <Text style={styles.profileIcon}>👤</Text>
+            <Image source={require('../../assets/icons/profile.png')} style={styles.profileIcon} />
             <View style={styles.profileInfo}>
               <Text style={styles.userName}>{user.username}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
@@ -309,7 +309,8 @@ const styles = StyleSheet.create({
   },
   
   profileIcon: {
-    fontSize: 48,
+    width: 48,
+    height: 48,
     marginRight: 16,
   },
   
@@ -322,12 +323,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text.primary,
     marginBottom: 4,
+    marginTop: 8,
   },
   
   userEmail: {
     fontSize: 16,
     color: colors.text.secondary,
-    marginBottom: 4,
+    marginBottom: -15,
   },
   
   memberSince: {
