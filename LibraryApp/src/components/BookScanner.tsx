@@ -149,7 +149,6 @@ export const BookScanner: React.FC<BookScannerProps> = ({ onTextExtracted, onBoo
     return (
       <View style={[styles.processingContainer, style]}>
         <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={styles.processingText}>Scanning...</Text>
       </View>
     );
   }
@@ -182,10 +181,5 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  processingText: {
-    fontSize: 10,
-    color: colors.text.secondary,
-    marginTop: 2,
   },
 });
