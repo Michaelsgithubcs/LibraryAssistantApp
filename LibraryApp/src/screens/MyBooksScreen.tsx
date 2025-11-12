@@ -13,7 +13,7 @@ import { User, Book, ReservationStatus, IssuedBook } from '../types';
 import { useNotifications } from '../components/NotificationProvider';
 import { SkeletonBox, SkeletonLines } from '../components/Skeleton';
 import { BookScanner } from '../components/BookScanner';
-import { bookTextProcessor, BookSearchResult } from '../utils/bookTextProcessor';
+import { bookTextProcessor, BookSearchResult, FuzzySearchResult } from '../utils/bookTextProcessor';
 
 interface MyBooksScreenProps {
   user: User;
@@ -98,10 +98,9 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
     }
     
     if (search) {
-      filtered = filtered.filter(book => 
-        book.title.toLowerCase().includes(search.toLowerCase()) ||
-        book.author.toLowerCase().includes(search.toLowerCase())
-      );
+      // Use fuzzy search to handle typos like "romio and juliet"
+      const fuzzyResults: FuzzySearchResult[] = bookTextProcessor.fuzzySearchBooks(search, filtered);
+      filtered = fuzzyResults.map((result: FuzzySearchResult) => result.book);
     }
     
     setFilteredBooks(filtered);
@@ -227,7 +226,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
           <Text style={[commonStyles.subtitle, {marginBottom: 8}]}>Search Library</Text>
           <View style={{ position: 'relative', marginBottom: 8 }}>
             <Input
-              placeholder="Search by title or author..."
+              placeholder="Search by title or author (handles typos)..."
               value={searchTerm}
               onChangeText={handleSearch}
               style={{ marginBottom: 0 }}

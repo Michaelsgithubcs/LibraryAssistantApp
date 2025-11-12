@@ -10,6 +10,15 @@ export interface BookSearchResult {
 }
 
 /**
+ * Fuzzy search result for user searches
+ */
+export interface FuzzySearchResult {
+  book: any; // Book object
+  score: number;
+  matchType: 'exact' | 'fuzzy' | 'partial';
+}
+
+/**
  * AI-powered book text processor that uses OpenAI to extract book titles from OCR text
  */
 export class BookTextProcessor {
@@ -200,6 +209,100 @@ export class BookTextProcessor {
 
     console.log('🔄 Fallback found nothing useful');
     return '';
+  }
+
+  /**
+   * Fuzzy search for user-typed queries that handles typos
+   * Returns books that match the search term with fuzzy matching
+   */
+  fuzzySearchBooks(searchTerm: string, books: any[]): FuzzySearchResult[] {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      return [];
+    }
+
+    const query = searchTerm.toLowerCase().trim();
+    const results: FuzzySearchResult[] = [];
+
+    for (const book of books) {
+      const title = book.title.toLowerCase();
+      const author = book.author.toLowerCase();
+
+      // Exact matches get highest priority
+      if (title.includes(query) || author.includes(query)) {
+        results.push({
+          book,
+          score: 1.0,
+          matchType: 'exact'
+        });
+        continue;
+      }
+
+      // Fuzzy matching for titles
+      const titleSimilarity = this.calculateSimilarity(query, title);
+      const authorSimilarity = this.calculateSimilarity(query, author);
+
+      const bestSimilarity = Math.max(titleSimilarity, authorSimilarity);
+
+      // Accept matches with good similarity
+      // Lower threshold for longer queries, higher for short ones
+      const threshold = query.length <= 3 ? 0.8 : query.length <= 6 ? 0.6 : 0.4;
+
+      if (bestSimilarity >= threshold) {
+        results.push({
+          book,
+          score: bestSimilarity,
+          matchType: bestSimilarity > 0.8 ? 'fuzzy' : 'partial'
+        });
+      }
+
+      // Also check for word-by-word matching (handles cases like "romio and juliet")
+      const queryWords = query.split(' ');
+      let wordMatches = 0;
+      let totalWords = queryWords.length;
+
+      for (const queryWord of queryWords) {
+        if (queryWord.length < 3) continue; // Skip very short words
+
+        // Check if this word appears in title or author with fuzzy matching
+        const titleWordSimilarity = this.getBestWordSimilarity(queryWord, title.split(' '));
+        const authorWordSimilarity = this.getBestWordSimilarity(queryWord, author.split(' '));
+
+        if (titleWordSimilarity > 0.7 || authorWordSimilarity > 0.7) {
+          wordMatches++;
+        }
+      }
+
+      // If most words match, include this book even if overall similarity is low
+      if (wordMatches >= Math.ceil(totalWords * 0.6) && wordMatches >= 1) {
+        const existingResult = results.find(r => r.book.id === book.id);
+        if (!existingResult) {
+          results.push({
+            book,
+            score: 0.5 + (wordMatches / totalWords) * 0.3, // Boost score for word matches
+            matchType: 'fuzzy'
+          });
+        }
+      }
+    }
+
+    // Sort by score (highest first)
+    results.sort((a, b) => b.score - a.score);
+
+    return results.slice(0, 20); // Return top 20 matches
+  }
+
+  /**
+   * Get the best similarity score for a word against a list of words
+   */
+  private getBestWordSimilarity(queryWord: string, targetWords: string[]): number {
+    let bestSimilarity = 0;
+
+    for (const targetWord of targetWords) {
+      const similarity = this.calculateSimilarity(queryWord, targetWord);
+      bestSimilarity = Math.max(bestSimilarity, similarity);
+    }
+
+    return bestSimilarity;
   }
 }
 
