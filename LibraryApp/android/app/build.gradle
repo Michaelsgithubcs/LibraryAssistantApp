@@ -76,7 +76,7 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 android {
     // ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+    compileSdk 35
 
     namespace "com.libraryapp"
     defaultConfig {
@@ -115,6 +115,27 @@ android {
             def buildType = variant.buildType.name
             outputFileName = "${appName}-${versionName}-${buildType}.apk"
         }
+    }
+}
+
+// Task to patch the generated ReactNativeApplicationEntryPoint.java file
+task patchReactNativeEntryPoint {
+    doLast {
+        def file = file("${buildDir}/generated/autolinking/src/main/java/com/facebook/react/ReactNativeApplicationEntryPoint.java")
+        if (file.exists()) {
+            def content = file.text
+            content = content.replaceAll(/WindowUtilKt\.setEdgeToEdgeFeatureFlagOn\(\);/, '// WindowUtilKt.setEdgeToEdgeFeatureFlagOn();')
+            file.text = content
+            println "Patched ReactNativeApplicationEntryPoint.java to comment out edge-to-edge method call"
+        }
+    }
+}
+
+// Make sure the patch task runs before Java compilation
+preBuild.dependsOn patchReactNativeEntryPoint
+tasks.whenTaskAdded { task ->
+    if (task.name.contains('compile') && task.name.contains('JavaWithJavac')) {
+        task.dependsOn patchReactNativeEntryPoint
     }
 }
 

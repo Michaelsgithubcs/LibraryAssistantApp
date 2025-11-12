@@ -6,6 +6,11 @@ buildscript {
         targetSdkVersion = 35
         // ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        // Text Recognition library settings
+        TextRecognition_compileSdkVersion = 34
+        TextRecognition_buildToolsVersion = "34.0.0"
+        TextRecognition_minSdkVersion = 21
+        TextRecognition_targetSdkVersion = 34
     }
     repositories {
         google()
