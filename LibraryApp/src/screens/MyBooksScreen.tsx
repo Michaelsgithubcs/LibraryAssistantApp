@@ -226,7 +226,7 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
           <Text style={[commonStyles.subtitle, {marginBottom: 8}]}>Search Library</Text>
           <View style={{ position: 'relative', marginBottom: 8 }}>
             <Input
-              placeholder="Search by title or author (handles typos)..."
+              placeholder="Search by title or author..."
               value={searchTerm}
               onChangeText={handleSearch}
               style={{ marginBottom: 0 }}

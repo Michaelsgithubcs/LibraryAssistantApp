@@ -486,9 +486,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         return;
       }
       
-      // Show reservation in progress
-      Alert.alert('Sending Request', 'Sending your reservation request...');
-      
       // Make the API call with proper error handling
       const result = await apiClient.reserveBook(bookId, user.id);
       
