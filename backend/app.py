@@ -69,6 +69,7 @@ else:
 
 # Legacy SQLite setup (commented out but kept for reference)
 # DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
+DATABASE = DATABASE_PATH  # Use DATABASE_PATH for consistency with existing code
 # db_dir = os.path.dirname(DATABASE)
 # if db_dir:
 #     os.makedirs(db_dir, exist_ok=True)
