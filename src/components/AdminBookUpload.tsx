@@ -28,6 +28,26 @@ export const AdminBookUpload = () => {
 
   const categories = ["Fiction", "Non-Fiction", "Romance", "Mystery", "Sci-Fi", "Biography", "Poetry", "Fantasy", "Dystopian"];
 
+  const mapGoogleBooksCategory = (googleCategory: string): string => {
+    const categoryMap: { [key: string]: string } = {
+      "adventure stories": "Fiction",
+      "fiction": "Fiction",
+      "fantasy": "Fantasy",
+      "science fiction": "Sci-Fi",
+      "mystery": "Mystery",
+      "romance": "Romance",
+      "biography": "Biography",
+      "poetry": "Poetry",
+      "non-fiction": "Non-Fiction",
+      "history": "Non-Fiction",
+      "self-help": "Non-Fiction",
+      "dystopian": "Dystopian",
+    };
+
+    const lowerCategory = googleCategory.toLowerCase();
+    return categoryMap[lowerCategory] || "Fiction"; // Default to Fiction if no match
+  };
+
   const fetchBookFromGoogleBooks = async (isbn: string) => {
     try {
       const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
@@ -37,12 +57,14 @@ export const AdminBookUpload = () => {
         const book = data.items[0].volumeInfo;
         const publishDate = book.publishedDate ? new Date(book.publishedDate).toISOString().split('T')[0] : "";
 
+        const readingTime = book.pageCount ? Math.round(book.pageCount / 40) : 0; // Rough estimate: 40 pages per hour
+
         setBookData({
           title: book.title || "",
           author: book.authors ? book.authors.join(", ") : "",
-          category: "",
+          category: book.categories ? mapGoogleBooksCategory(book.categories[0]) : "",
           description: book.description || "",
-          reading_time_minutes: 0,
+          reading_time_minutes: readingTime,
           total_copies: 1,
           available_copies: 1,
           publish_date: publishDate,
