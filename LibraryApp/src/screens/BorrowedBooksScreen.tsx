@@ -31,17 +31,32 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
   useEffect(() => {
     // Initial fetch
     fetchData();
-    
+
     // Refresh when screen comes into focus
     const unsubscribe = navigation.addListener('focus', () => {
       fetchData();
     });
-    
+
     // Cleanup the listener on unmount
     return unsubscribe;
   }, [navigation]);
 
+  // Effect to fetch data when user becomes available
+  useEffect(() => {
+    if (user && user.id) {
+      console.log('User data available, fetching books data');
+      fetchData();
+    }
+  }, [user]);
+
   const fetchData = async () => {
+    // Guard: Don't fetch if user is not loaded or invalid
+    if (!user || !user.id) {
+      console.log('User not loaded yet, skipping data fetch');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Fetch all book data, including borrowed, returned and read books
       const [issuedAndReturnedBooks, reservationsData, readBooksHistory] = await Promise.all([
@@ -49,7 +64,7 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
         Promise.resolve([]),
         apiClient.getReadHistory(user.id)
       ]);
-      
+
       // Get a complete history from the /users/:id/history endpoint
       const historyResponse = await apiClient.getAllUserHistory(user.id);
       const completeHistory = historyResponse.history || [];

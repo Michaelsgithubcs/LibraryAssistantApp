@@ -248,11 +248,24 @@ export const apiClient = {
   
   async getAllUserHistory(userId: number): Promise<{success: boolean, history: HistoryItem[]}> {
     try {
+      // Validate userId
+      if (!userId || typeof userId !== 'number' || userId <= 0) {
+        console.error('Invalid userId provided to getAllUserHistory:', userId);
+        return { success: false, history: [] };
+      }
+
+      console.log('Fetching complete history for user:', userId);
       const response = await fetch(`${API_BASE}/users/${userId}/history`);
+
       if (!response.ok) {
+        console.error('History API returned error status:', response.status, response.statusText);
         throw new Error('Failed to fetch complete history');
       }
-      return response.json();
+
+      const data = await response.json();
+      console.log('Successfully fetched history for user:', userId, 'Items:', data.history?.length || 0);
+
+      return data;
     } catch (error) {
       console.error('Error fetching complete history:', error);
       return { success: false, history: [] };
