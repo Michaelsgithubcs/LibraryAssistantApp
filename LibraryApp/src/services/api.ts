@@ -2,7 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Book, IssuedBook, User, ReservationStatus, Fine, HistoryItem } from '../types';
 
 // Android emulator API URL (10.0.2.2 is the host machine's localhost)
-export const API_BASE = 'http://10.0.2.2:5001/api'; 
+// export const API_BASE = 'http://10.0.2.2:5001/api';
+
+// Render production URL
+export const API_BASE = 'https://libraryassistantapp.onrender.com/api'; 
 
 export const apiClient = {
   async login(email: string, password: string): Promise<User> {

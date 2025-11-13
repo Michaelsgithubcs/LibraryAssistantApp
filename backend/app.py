@@ -48,20 +48,55 @@ except Exception as e:
     send_fcm_v1 = None
     FCM_V1_AVAILABLE = False
 
+# Database configuration for Render (PostgreSQL) or local (SQLite)
+DATABASE_URL = os.environ.get('DATABASE_URL')  # Render PostgreSQL
+DATABASE_PATH = os.environ.get('DATABASE_PATH', 'library.db')  # Local SQLite fallback
+
+if DATABASE_URL:
+    # Use PostgreSQL for Render deployment
+    try:
+        import psycopg2
+        import psycopg2.extras
+        USE_POSTGRESQL = True
+        print("[Startup] Using PostgreSQL database (Render)")
+    except ImportError:
+        print("[Startup] PostgreSQL not available, falling back to SQLite")
+        USE_POSTGRESQL = False
+else:
+    # Use SQLite for local development
+    USE_POSTGRESQL = False
+    print("[Startup] Using SQLite database (Local)")
+
+# Legacy SQLite setup (commented out but kept for reference)
+# DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
+# db_dir = os.path.dirname(DATABASE)
+# if db_dir:
+#     os.makedirs(db_dir, exist_ok=True)
+# print(f"[Startup] Using database at: {os.path.abspath(DATABASE)}")
+
 app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
 
 # Scheduler will be initialized after function definitions
 
-# Database path: allow overriding via env var so we can attach a Persistent Disk on Render
-DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
-# Ensure directory exists if a directory component is present
-db_dir = os.path.dirname(DATABASE)
-if db_dir:
-    os.makedirs(db_dir, exist_ok=True)
+# Database connection functions
+def get_db_connection():
+    """Get database connection - supports both PostgreSQL (Render) and SQLite (local)"""
+    if USE_POSTGRESQL and DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL)
+    else:
+        # Local SQLite fallback
+        return sqlite3.connect(DATABASE_PATH)
 
-print(f"[Startup] Using database at: {os.path.abspath(DATABASE)}")
+def get_db_cursor(conn):
+    """Get database cursor with appropriate settings"""
+    if USE_POSTGRESQL:
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
+        cursor = conn.cursor()
+        cursor.row_factory = sqlite3.Row  # Enable column access by name
+        return cursor
 
 # Configure Gemini API key from env if present
 GENAI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -72,13 +107,13 @@ if GENAI_API_KEY:
 FCM_SERVER_KEY = os.environ.get('FCM_SERVER_KEY')
 
 def init_db():
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn = get_db_connection()
+    cursor = get_db_cursor(conn)
     
     # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
@@ -90,15 +125,15 @@ def init_db():
     # Books table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS books (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
             author TEXT NOT NULL,
             isbn TEXT UNIQUE,
             category TEXT NOT NULL,
             description TEXT,
             price DECIMAL(10,2) DEFAULT 0,
-            is_free BOOLEAN DEFAULT 1,
-            is_ebook BOOLEAN DEFAULT 0,
+            is_free BOOLEAN DEFAULT true,
+            is_ebook BOOLEAN DEFAULT false,
             cover_image TEXT,
             pdf_url TEXT,
             total_copies INTEGER DEFAULT 1,
@@ -111,14 +146,17 @@ def init_db():
     
     # Add publish_date column if it doesn't exist
     try:
-        cursor.execute('ALTER TABLE books ADD COLUMN publish_date DATE')
-    except sqlite3.OperationalError:
+        if USE_POSTGRESQL:
+            cursor.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS publish_date DATE")
+        else:
+            cursor.execute('ALTER TABLE books ADD COLUMN publish_date DATE')
+    except Exception:
         pass  # Column already exists
     
     # Book ratings table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS book_ratings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             book_id INTEGER,
             user_id INTEGER,
             rating INTEGER CHECK(rating >= 1 AND rating <= 5),
@@ -133,7 +171,7 @@ def init_db():
     # Book issues table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS book_issues (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             book_id INTEGER,
             user_id INTEGER,
             issue_date DATE NOT NULL,
@@ -150,9 +188,13 @@ def init_db():
     
     # Add new columns if they don't exist
     try:
-        cursor.execute('ALTER TABLE book_issues ADD COLUMN overdue_fee_per_day DECIMAL(10,2) DEFAULT 5.00')
-        cursor.execute('ALTER TABLE book_issues ADD COLUMN damage_description TEXT')
-    except sqlite3.OperationalError:
+        if USE_POSTGRESQL:
+            cursor.execute("ALTER TABLE book_issues ADD COLUMN IF NOT EXISTS overdue_fee_per_day DECIMAL(10,2) DEFAULT 5.00")
+            cursor.execute("ALTER TABLE book_issues ADD COLUMN IF NOT EXISTS damage_description TEXT")
+        else:
+            cursor.execute('ALTER TABLE book_issues ADD COLUMN overdue_fee_per_day DECIMAL(10,2) DEFAULT 5.00')
+            cursor.execute('ALTER TABLE book_issues ADD COLUMN damage_description TEXT')
+    except Exception:
         pass
 
     # Fine payments table (records individual payments for audit/history)
