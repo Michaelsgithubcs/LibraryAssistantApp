@@ -2728,30 +2728,48 @@ def ai_book_assistant_v2():
 
             print("Sending request to Gemini API...")
             import requests as req
-            
-            # Use REST API directly with gemini-1.5-flash (stable and widely available)
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-            
-            full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            payload = {
-                "contents": [{
-                    "parts": [{"text": full_prompt}]
-                }]
-            }
-            
-            api_response = req.post(url, json=payload)
-            api_response.raise_for_status()
-            result = api_response.json()
-            
-            text = result['candidates'][0]['content']['parts'][0]['text']
-            print("Received response from Gemini API")
-            print(f"Response text length: {len(text) if text else 0} characters")
-            
-            if not text or len(text.strip()) == 0:
-                print("Error: Empty response from Gemini API")
-                return jsonify({'error': 'AI returned an empty response'}), 500
-                
-            return jsonify({ 'answer': text })
+
+            # Try multiple models in order of preference
+            models_to_try = [
+                'gemini-1.5-flash',
+                'gemini-1.5-pro',
+                'gemini-pro'
+            ]
+
+            last_error = None
+            for model in models_to_try:
+                try:
+                    print(f"Trying model: {model}")
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+                    full_prompt = f"{system_prompt}\n\n{user_prompt}"
+                    payload = {
+                        "contents": [{
+                            "parts": [{"text": full_prompt}]
+                        }]
+                    }
+
+                    api_response = req.post(url, json=payload, timeout=30)
+                    api_response.raise_for_status()
+                    result = api_response.json()
+
+                    text = result['candidates'][0]['content']['parts'][0]['text']
+                    print(f"Success with model: {model}")
+                    print(f"Response text length: {len(text) if text else 0} characters")
+
+                    if not text or len(text.strip()) == 0:
+                        print("Error: Empty response from Gemini API")
+                        continue  # Try next model
+
+                    return jsonify({ 'answer': text })
+
+                except Exception as model_error:
+                    print(f"Model {model} failed: {str(model_error)}")
+                    last_error = model_error
+                    continue  # Try next model
+
+            # If all models failed, raise the last error
+            raise last_error
             
         except Exception as ai_error:
             print(f"Error in AI processing: {str(ai_error)}")
