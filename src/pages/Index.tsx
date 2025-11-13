@@ -13,6 +13,7 @@ import { MyBooks } from "@/components/MyBooks";
 import { BookRequests } from "@/components/BookRequests";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { API_BASE_URL } from "@/lib/api";
 import { BookOpen, Users, CreditCard, MessageSquare, Settings, User, LogOut, ShoppingCart } from "lucide-react";
 
 interface CurrentUser {
@@ -35,7 +36,7 @@ const Index = () => {
   const fetchRequestCount = async () => {
     if (currentUser?.role === 'admin') {
       try {
-        const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/checkouts/count');
+        const response = await fetch(`${API_BASE_URL}/admin/checkouts/count`);
         if (response.ok) {
           const data = await response.json();
           setRequestCount(data.count);
@@ -50,7 +51,7 @@ const Index = () => {
   const fetchAccountRequestCount = async () => {
     if (currentUser?.role === 'admin') {
       try {
-        const response = await fetch('https://libraryassistantapp.onrender.com/api/account-requests');
+        const response = await fetch(`${API_BASE_URL}/account-requests`);
         console.debug('fetchAccountRequestCount status:', response.status);
         if (response.ok) {
           const data = await response.json();
@@ -69,7 +70,7 @@ const Index = () => {
   const fetchUserReservationStatus = async () => {
     if (currentUser?.role === 'user') {
       try {
-        const response = await fetch(`https://libraryassistantapp.onrender.com/api/user-reservations/${currentUser.id}`);
+        const response = await fetch(`${API_BASE_URL}/user-reservations/${currentUser.id}`);
         if (response.ok) {
           const data = await response.json();
           const hasApproved = data.some((req: any) => req.status === 'approved');
@@ -101,7 +102,7 @@ const Index = () => {
     }
     if (currentView === 'mybooks' && currentUser?.role === 'user') {
       // Mark reservations as viewed
-      fetch(`https://libraryassistantapp.onrender.com/api/user-reservations/${currentUser.id}/mark-viewed`, {
+      fetch(`${API_BASE_URL}/user-reservations/${currentUser.id}/mark-viewed`, {
         method: 'POST'
       }).then(() => {
         setUserReservationStatus({ hasApproved: false, hasRejected: false });

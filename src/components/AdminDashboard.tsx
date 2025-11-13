@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, Users, AlertTriangle, Plus } from "lucide-react";
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface AdminDashboardProps {
   onNavigate?: (view: string) => void;
@@ -35,19 +36,19 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
 
   const fetchStats = async () => {
     try {
-      const booksResponse = await fetch('https://libraryassistantapp.onrender.com/api/books');
+      const booksResponse = await fetch(`${API_BASE_URL}/books`);
       const books = await booksResponse.json();
       
-      const membersResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/members');
+      const membersResponse = await fetch(`${API_BASE_URL}/admin/members`);
       const members = membersResponse.ok ? await membersResponse.json() : [];
       
-      const overdueResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/overdue-count');
+      const overdueResponse = await fetch(`${API_BASE_URL}/admin/overdue-count`);
       const overdueData = overdueResponse.ok ? await overdueResponse.json() : { count: 0 };
       
-      const finesResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/fines-count');
+      const finesResponse = await fetch(`${API_BASE_URL}/admin/fines-count`);
   const finesData = finesResponse.ok ? await finesResponse.json() : { amount: 0, damage_total: 0, overdue_total: 0 };
       
-      const requestsResponse = await fetch('https://libraryassistantapp.onrender.com/api/admin/checkouts/count');
+      const requestsResponse = await fetch(`${API_BASE_URL}/admin/checkouts/count`);
       const requestsData = requestsResponse.ok ? await requestsResponse.json() : { count: 0 };
       
       const activeMembers = members.filter(m => m.status === 'active').length;
@@ -90,7 +91,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
 
   const fetchRecentBooks = async () => {
     try {
-      const response = await fetch('https://libraryassistantapp.onrender.com/api/books');
+      const response = await fetch(`${API_BASE_URL}/books`);
       const books = await response.json();
       setRecentBooks(books.slice(0, 3));
     } catch (error) {

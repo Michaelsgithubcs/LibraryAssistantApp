@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { BookOpen, Clock, AlertTriangle, Calendar, ShoppingCart, MessageCircle, CreditCard, BookMarked } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BookChatbot } from "./BookChatbot";
+import { API_BASE_URL } from "@/lib/api";
 
 interface UserDashboardProps {
   user: { id: number; username: string; role: string };
@@ -37,7 +38,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
   const fetchSuggestions = async () => {
     try {
       // First, try to fetch ML-powered recommendations for the user
-      const response = await fetch(`https://libraryassistantapp.onrender.com/api/recommendations/${user.id}?type=ml&limit=5`);
+      const response = await fetch(`${API_BASE_URL}/recommendations/${user.id}?type=ml&limit=5`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.recommendations && data.recommendations.length > 0) {
@@ -55,7 +56,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
       
       // If ML recommendations fail or are empty, fall back to regular books
       try {
-        const booksResponse = await fetch('https://libraryassistantapp.onrender.com/api/books');
+        const booksResponse = await fetch(`${API_BASE_URL}/books`);
         if (booksResponse.ok) {
           const booksData = await booksResponse.json();
           // Filter out books that the user might already have
@@ -83,9 +84,9 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
   const fetchUserStats = async () => {
     try {
       const [overdueRes, finesRes, reservationsRes] = await Promise.all([
-        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/overdue-books`),
-        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/fines`),
-        fetch(`https://libraryassistantapp.onrender.com/api/user/${user.id}/reservations`)
+        fetch(`${API_BASE_URL}/user/${user.id}/overdue-books`),
+        fetch(`${API_BASE_URL}/user/${user.id}/fines`),
+        fetch(`${API_BASE_URL}/user/${user.id}/reservations`)
       ]);
       
       const overdueData = overdueRes.ok ? await overdueRes.json() : [];
@@ -106,7 +107,7 @@ export const UserDashboard = ({ user, activeTab = "dashboard" }: UserDashboardPr
 
   const reserveBook = async (bookId) => {
     try {
-      const response = await fetch(`https://libraryassistantapp.onrender.com/api/books/${bookId}/reserve`, {
+      const response = await fetch(`${API_BASE_URL}/books/${bookId}/reserve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id })

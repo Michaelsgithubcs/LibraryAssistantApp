@@ -350,7 +350,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         .map(book => ({
           ...book,
           id: book.id.toString(),
-          availableCopies: book.availableCopies || 1,
+          availableCopies: book.availableCopies || 0,
           totalCopies: book.totalCopies || 1,
           isbn: book.isbn || 'Unknown',
           description: book.description || '',
@@ -376,7 +376,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
           .map(book => ({
             ...book,
             id: book.id.toString(),
-            availableCopies: book.availableCopies || 1,
+            availableCopies: book.availableCopies || 0,
             totalCopies: book.totalCopies || 1,
             isbn: book.isbn || 'Unknown',
             description: book.description || '',
@@ -692,7 +692,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             ...book,
             isbn: book.isbn || '',
             description: book.description || '',
-            availableCopies: book.availableCopies || 1,
+            availableCopies: book.availableCopies || 0,
             totalCopies: book.totalCopies || 1
           }));
         
@@ -847,7 +847,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             </View>
           ) : (
             recommendedBooks.map((book) => {
-              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
+              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 0);
               return (
                 <View key={book.id} style={styles.bookRecommendation}>
                   <View style={styles.bookInfo}>
@@ -895,7 +895,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
             </View>
           ) : (
             newBooks.map((book) => {
-              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 1);
+              const bookStatus = getBookStatus(book.id, book.title, book.availableCopies || 0);
               return (
                 <View key={`new-${book.id}`} style={styles.bookRecommendation}>
                   <View style={styles.bookInfo}>
