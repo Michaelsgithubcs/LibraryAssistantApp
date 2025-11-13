@@ -23,8 +23,16 @@ except ImportError:
     APSCHEDULER_AVAILABLE = False
     print("[Startup] APScheduler not available - automated tasks disabled")
 # Lazy import recommendation services
-from recommendation_service import RecommendationService
-from ml_recommendation_service import MLRecommendationService
+try:
+    from recommendation_service import RecommendationService
+    from ml_recommendation_service import MLRecommendationService
+    RECOMMENDATION_SERVICES_AVAILABLE = True
+    print("[Startup] Recommendation services initialized successfully")
+except ImportError as e:
+    print(f"[Startup] Recommendation services not available: {e}")
+    RecommendationService = None
+    MLRecommendationService = None
+    RECOMMENDATION_SERVICES_AVAILABLE = False
 import requests
 try:
     # prefer the HTTP v1 FCM helper if available
@@ -44,24 +52,7 @@ app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
 
-# Initialize background scheduler for automated tasks (if available)
-if APSCHEDULER_AVAILABLE:
-    scheduler = BackgroundScheduler()
-    scheduler.start()
-
-    # Schedule expired checkout processing every hour
-    scheduler.add_job(
-        func=process_expired_checkouts,
-        trigger=IntervalTrigger(hours=1),
-        id='process_expired_checkouts',
-        name='Process expired checkouts every hour',
-        replace_existing=True
-    )
-
-    print("[Startup] Background scheduler initialized with expired checkout processing")
-else:
-    scheduler = None
-    print("[Startup] Background scheduler not available - manual processing only")
+# Scheduler will be initialized after function definitions
 
 # Database path: allow overriding via env var so we can attach a Persistent Disk on Render
 DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
@@ -673,55 +664,96 @@ def reserve_book(book_id):
     try:
         data = request.json
         user_id = data.get('user_id', 1)
-        
+
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
-        
-        # Check if book exists
-        cursor.execute('SELECT title FROM books WHERE id = ?', (book_id,))
+
+        # Check if book exists and get availability
+        cursor.execute('SELECT title, available_copies, total_copies FROM books WHERE id = ?', (book_id,))
         book = cursor.fetchone()
-        
+
         if not book:
             conn.close()
             return jsonify({'error': 'Book not found'}), 404
-        
+
+        book_title, available_copies, total_copies = book
+
         # Check if user already has pending request for this book
-        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status = "pending"', (book_id, user_id))
+        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status IN ("pending", "approved_checkout")', (book_id, user_id))
         existing = cursor.fetchone()
-        
+
         if existing:
             conn.close()
-            return jsonify({'error': 'You already have a pending request for this book'}), 400
-        
-        # Create reservation request
-        cursor.execute('''
-            INSERT INTO book_reservations (book_id, user_id, status)
-            VALUES (?, ?, 'pending')
-        ''', (book_id, user_id))
-        
-        conn.commit()
-        
-        # Send notification to all admins about the new reservation request
-        cursor.execute('SELECT id FROM users WHERE role = "admin"')
-        admin_ids = [row[0] for row in cursor.fetchall()]
-        
-        book_title = book[0] if book else "Book"
-        admin_notification_title = "📖 New Reservation Request"
-        admin_notification_message = f"{user_id} has requested to reserve '{book_title}'"
-        
-        for admin_id in admin_ids:
-            send_push_to_user(admin_id, admin_notification_title, admin_notification_message, {
-                'type': 'reservation_request',
+            return jsonify({'error': 'You already have a pending request or approved checkout for this book'}), 400
+
+        # Automated approval logic
+        if available_copies > 0:
+            # Auto-approve: create reservation and checkout record
+            cursor.execute('''
+                INSERT INTO book_reservations (book_id, user_id, status)
+                VALUES (?, ?, 'approved_checkout')
+            ''', (book_id, user_id))
+
+            reservation_id = cursor.lastrowid
+
+            # Calculate checkout deadline (2 days from now)
+            from datetime import datetime, timedelta
+            checkout_deadline = (datetime.now() + timedelta(days=2)).isoformat()
+
+            # Create checkout record
+            cursor.execute('''
+                INSERT INTO book_checkouts (reservation_id, book_id, user_id, status, checkout_deadline, approved_at)
+                VALUES (?, ?, ?, 'pending_checkout', ?, ?)
+            ''', (reservation_id, book_id, user_id, checkout_deadline, datetime.now().isoformat()))
+
+            # Update book availability
+            cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+
+            # Send notification to user
+            send_push_to_user(user_id, 'Reservation Approved', f'Your reservation for "{book_title}" has been approved! Please collect it within 2 days.', {
+                'type': 'reservation_approved',
                 'book_id': book_id,
-                'user_id': user_id,
-                'book_title': book_title
+                'book_title': book_title,
+                'checkout_deadline': checkout_deadline
             })
-        
-        conn.close()
-        
-        return jsonify({'message': 'Reservation request sent to admin for approval'})
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({
+                'status': 'approved_checkout',
+                'message': f'Reservation approved! Please collect "{book_title}" within 2 days.',
+                'checkout_deadline': checkout_deadline
+            })
+
+        else:
+            # Auto-reject: book not available
+            cursor.execute('''
+                INSERT INTO book_reservations (book_id, user_id, status, rejection_reason)
+                VALUES (?, ?, 'rejected', 'Book currently unavailable')
+            ''', (book_id, user_id))
+
+            # Send notification to user
+            send_push_to_user(user_id, 'Reservation Rejected', f'Sorry, "{book_title}" is currently unavailable.', {
+                'type': 'reservation_rejected',
+                'book_id': book_id,
+                'book_title': book_title,
+                'reason': 'Book currently unavailable'
+            })
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({
+                'status': 'rejected',
+                'reason': 'Book currently unavailable',
+                'message': f'Sorry, "{book_title}" is currently unavailable.'
+            })
+
     except Exception as e:
         print(f'Reserve error: {e}')
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/reservations/<int:reservation_id>/approve', methods=['POST'], endpoint='approve_reservation_legacy')
@@ -858,6 +890,80 @@ def get_reservations():
 
     conn.close()
     return jsonify(reservation_list)
+
+@app.route('/api/admin/checkouts', methods=['GET'])
+def get_checkouts():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT bc.id, b.title as book_title, b.author as book_author,
+               u.username as user_name, u.email as user_email,
+               bc.status, bc.checkout_deadline, bc.approved_at, bc.completed_at
+        FROM book_checkouts bc
+        JOIN books b ON bc.book_id = b.id
+        JOIN users u ON bc.user_id = u.id
+        ORDER BY bc.approved_at DESC
+    ''')
+    checkouts = cursor.fetchall()
+
+    checkout_list = []
+    for checkout in checkouts:
+        checkout_list.append({
+            'id': checkout[0],
+            'book_title': checkout[1],
+            'book_author': checkout[2],
+            'user_name': checkout[3],
+            'user_email': checkout[4],
+            'status': checkout[5],
+            'checkout_deadline': checkout[6],
+            'approved_at': checkout[7],
+            'completed_at': checkout[8]
+        })
+
+    conn.close()
+    return jsonify(checkout_list)
+
+@app.route('/api/admin/checkouts/<int:checkout_id>/complete', methods=['POST'])
+def complete_checkout(checkout_id):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    try:
+        # Get checkout details
+        cursor.execute('SELECT book_id, user_id FROM book_checkouts WHERE id = ?', (checkout_id,))
+        checkout = cursor.fetchone()
+        
+        if not checkout:
+            conn.close()
+            return jsonify({'error': 'Checkout not found'}), 404
+            
+        book_id, user_id = checkout
+        
+        # Update checkout status
+        cursor.execute('''
+            UPDATE book_checkouts 
+            SET status = 'completed', completed_at = datetime('now')
+            WHERE id = ?
+        ''', (checkout_id,))
+        
+        # Decrease available copies
+        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+        
+        # Create book issue record
+        cursor.execute('''
+            INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status)
+            VALUES (?, ?, datetime('now'), datetime('now', '+30 days'), 'issued')
+        ''', (book_id, user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'Checkout completed successfully'})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/books/<int:book_id>', methods=['PUT'])
 def edit_book(book_id):
@@ -1986,31 +2092,42 @@ def cancel_reservation(reservation_id):
     cursor = conn.cursor()
     
     try:
-        # Get user_id before deleting the reservation
-        cursor.execute('SELECT user_id FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        # Get reservation details before deleting
+        cursor.execute('SELECT user_id, status, book_id FROM book_reservations WHERE id = ?', (reservation_id,))
         result = cursor.fetchone()
         
         if not result:
             conn.close()
-            return jsonify({'error': 'Reservation not found or cannot be cancelled'}), 404
+            return jsonify({'error': 'Reservation not found'}), 404
         
-        user_id = result[0]
+        user_id, status, book_id = result
+        
+        # Only allow cancelling pending or approved reservations
+        if status not in ['pending', 'approved', 'approved_checkout']:
+            conn.close()
+            return jsonify({'error': 'Reservation cannot be cancelled'}), 400
+        
+        # If approved, also cancel the associated checkout
+        if status in ['approved', 'approved_checkout']:
+            cursor.execute('DELETE FROM book_checkouts WHERE reservation_id = ?', (reservation_id,))
+            # Return the book copy to available
+            cursor.execute('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?', (book_id,))
         
         # Delete the reservation
-        cursor.execute('DELETE FROM book_reservations WHERE id = ? AND status = "pending"', (reservation_id,))
+        cursor.execute('DELETE FROM book_reservations WHERE id = ?', (reservation_id,))
         
-        # Delete related notification(s) - delete any 'reservation' type for this user
+        # Delete related notification(s)
         cursor.execute('''
             DELETE FROM notifications 
             WHERE user_id = ? 
             AND type = 'reservation'
         ''', (user_id,))
         
-        print(f'Deleted {cursor.rowcount} reservation notification(s) for user {user_id}')
+        print(f'Cancelled {status} reservation {reservation_id} for user {user_id}')
         
         conn.commit()
         conn.close()
-        return jsonify({'message': 'Reservation and related notifications cancelled successfully'})
+        return jsonify({'message': 'Reservation cancelled successfully'})
     except Exception as e:
         conn.close()
         return jsonify({'error': str(e)}), 500
@@ -3308,6 +3425,25 @@ def process_expired_checkouts():
 
     except Exception as e:
         print(f'Error processing expired checkouts: {e}')
+
+# Initialize background scheduler for automated tasks (if available)
+if APSCHEDULER_AVAILABLE:
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+
+    # Schedule expired checkout processing every hour
+    scheduler.add_job(
+        func=process_expired_checkouts,
+        trigger=IntervalTrigger(hours=1),
+        id='process_expired_checkouts',
+        name='Process expired checkouts every hour',
+        replace_existing=True
+    )
+
+    print("[Startup] Background scheduler initialized with expired checkout processing")
+else:
+    scheduler = None
+    print("[Startup] Background scheduler not available - manual processing only")
 
 import atexit
 

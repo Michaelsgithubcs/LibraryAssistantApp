@@ -86,9 +86,12 @@ export const ReservationsScreen: React.FC<ReservationsScreenProps> = ({ user }) 
               <View style={{ flex: 1, paddingRight: 8 }}>
                 <Text style={commonStyles.subtitle}>{r.book_title}</Text>
                 <Text style={commonStyles.textSecondary}>by {r.book_author}</Text>
+                <Text style={[commonStyles.textMuted, { fontSize: 12, marginTop: 4 }]}>Reservation #{r.id}</Text>
               </View>
               <View style={[styles.statusChip, { backgroundColor: statusColor(r.status) + '20', borderColor: statusColor(r.status) }]}>
-                <Text style={{ color: statusColor(r.status), fontWeight: '600' }}>{r.status.toUpperCase()}</Text>
+                <Text style={{ color: statusColor(r.status), fontWeight: '600', fontSize: 10 }}>
+                  {r.status === 'approved_checkout' ? 'APPROVED AWAITING CHECKOUT' : r.status.toUpperCase()}
+                </Text>
               </View>
             </View>
             <View style={{ height: 8 }} />
@@ -127,6 +130,36 @@ export const ReservationsScreen: React.FC<ReservationsScreenProps> = ({ user }) 
                 />
               </View>
             )}
+            {r.status === 'approved_checkout' && (
+              <View style={{ marginTop: 12 }}>
+                <Button
+                  title="Cancel Reservation"
+                  variant="outline"
+                  onPress={async () => {
+                    Alert.alert(
+                      'Cancel Reservation',
+                      `Are you sure you want to cancel your approved reservation for "${r.book_title}"?`,
+                      [
+                        { text: 'No', style: 'cancel' },
+                        {
+                          text: 'Yes, Cancel',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await apiClient.cancelReservation(Number(r.id));
+                              Alert.alert('Success', `Reservation for "${r.book_title}" cancelled.`);
+                              loadReservations();
+                            } catch (e) {
+                              Alert.alert('Error', 'Failed to cancel reservation. Please try again.');
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                />
+              </View>
+            )}
           </Card>
         ))
       )}
@@ -141,10 +174,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   statusChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
+    minWidth: 120,
+    alignItems: 'center',
   },
   metaRow: {
     flexDirection: 'row',

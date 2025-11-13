@@ -86,21 +86,24 @@ CREATE TABLE IF NOT EXISTS purchases (
     FOREIGN KEY (book_id) REFERENCES books (id)
 );
 
--- Book reservations
-CREATE TABLE IF NOT EXISTS book_reservations (
+-- Book checkouts (for approved reservations ready for pickup)
+CREATE TABLE IF NOT EXISTS book_checkouts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    book_id INTEGER,
-    user_id INTEGER,
-    status TEXT DEFAULT 'pending',
-    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    approved_at TIMESTAMP,
-    approved_by INTEGER,
-    rejection_reason TEXT,
+    reservation_id INTEGER NOT NULL,
+    book_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending_checkout' CHECK(status IN ('pending_checkout', 'completed', 'expired')),
+    checkout_deadline TIMESTAMP NOT NULL,
+    approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
     viewed BOOLEAN DEFAULT 0,
+    FOREIGN KEY (reservation_id) REFERENCES book_reservations (id),
     FOREIGN KEY (book_id) REFERENCES books (id),
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (approved_by) REFERENCES users (id)
+    FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_book_checkouts_status ON book_checkouts(status);
+CREATE INDEX IF NOT EXISTS idx_book_checkouts_deadline ON book_checkouts(checkout_deadline);
 
 -- Notifications table for persistent user notifications
 CREATE TABLE IF NOT EXISTS notifications (

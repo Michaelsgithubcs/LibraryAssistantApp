@@ -93,17 +93,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     try {
       // Backend now creates notifications for approved/rejected reservations
       // Fetch updated reservations and refresh dashboard stats
-      const reservations = await apiClient.getReservationStatus(user.id);
+      const reservations = await apiClient.getReservationHistory(user.id);
       setUserReservations(reservations);
       
       // Update stats immediately to reflect reservation changes
       const pendingCount = reservations.filter((r: ReservationStatus) => r.status === 'pending').length;
-      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const approvedCount = reservations.filter((r: ReservationStatus) => r.status === 'approved_checkout').length;
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved_checkout');
       const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
       
       setStats(prev => ({
         ...prev,
-        reservations: pendingCount,
+        reservations: pendingCount + approvedCount,
         reservationStatus: { hasApproved, hasRejected }
       }));
     } catch (error) {
@@ -115,7 +116,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     try {
       const [myBooks, reservations, fines] = await Promise.all([
         apiClient.getMyBooks(user.id),
-        apiClient.getReservationStatus(user.id),
+        apiClient.getReservationHistory(user.id),
         apiClient.getMyFines(user.id)
       ]);
 
@@ -137,12 +138,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         return dueDate < today && book.status === 'issued';
       }).length;
 
-      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved_checkout');
       const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
 
       // Check if the user has any reservations
       const hasReservations = userReservations.some((r: ReservationStatus) => 
-        r.status === 'approved' || r.status === 'pending'
+        r.status === 'approved_checkout' || r.status === 'pending'
       );
 
       // Calculate total outstanding fines
@@ -156,7 +157,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         booksIssued: myBooks.length,
         overdueBooks: overdueCount,
         totalFines,
-        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
+        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending' || r.status === 'approved_checkout').length,
         reservationStatus: { hasApproved, hasRejected }
       });
     } catch (error) {
@@ -481,11 +482,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Update the user's reservations and stats asynchronously
       setTimeout(() => {
         // Get updated user reservations without refreshing everything
-        apiClient.getReservationStatus(user.id).then(reservations => {
+        apiClient.getReservationHistory(user.id).then(reservations => {
           setUserReservations(reservations);
           
           // Update stats without refreshing recommendations
-          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved_checkout');
           const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
           
           setStats(prevStats => ({
@@ -535,11 +536,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       setNewBooks(prevBooks => prevBooks.filter(book => book.id !== bookId));
       
       setTimeout(() => {
-        apiClient.getReservationStatus(user.id).then(reservations => {
+        apiClient.getReservationHistory(user.id).then(reservations => {
           setUserReservations(reservations);
           
           // Update stats without refreshing recommendations
-          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+          const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved_checkout');
           const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
           
           setStats(prevStats => ({
@@ -615,7 +616,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
     if (stats.reservations > 0) {
         navigation.navigate('Reservations');
     } else {
-      Alert.alert('No Reservations', 'You have no pending book reservations.');
+      Alert.alert('No Reservations', 'You have no book reservations.');
     }
   };
 
@@ -709,7 +710,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Update stats, user books and reservations
       const [myBooks, reservations, fines] = await Promise.all([
         apiClient.getMyBooks(user.id),
-        apiClient.getReservationStatus(user.id),
+        apiClient.getReservationHistory(user.id),
         apiClient.getMyFines(user.id)
       ]);
 
@@ -734,7 +735,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         return dueDate < today && book.status === 'issued';
       }).length;
 
-      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved');
+      const hasApproved = reservations.some((r: ReservationStatus) => r.status === 'approved_checkout');
       const hasRejected = reservations.some((r: ReservationStatus) => r.status === 'rejected');
 
       // Calculate total outstanding fines
@@ -748,7 +749,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
         booksIssued: myBooks.length,
         overdueBooks: overdueCount,
         totalFines,
-        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending').length,
+        reservations: reservations.filter((r: ReservationStatus) => r.status === 'pending' || r.status === 'approved_checkout').length,
         reservationStatus: { hasApproved, hasRejected }
       });
 
