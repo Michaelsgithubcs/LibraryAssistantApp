@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Upload, Plus } from "lucide-react";
+import { Upload, Plus, Camera, CameraOff } from "lucide-react";
 
 export const AdminBookUpload = () => {
   const [bookData, setBookData] = useState({
@@ -20,8 +21,80 @@ export const AdminBookUpload = () => {
     publish_date: "",
   });
   const [loading, setLoading] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanningError, setScanningError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const codeReader = useRef<BrowserMultiFormatReader | null>(null);
 
   const categories = ["Fiction", "Non-Fiction", "Romance", "Mystery", "Sci-Fi", "Biography", "Poetry", "Fantasy", "Dystopian"];
+
+  const fetchBookFromGoogleBooks = async (isbn: string) => {
+    try {
+      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+      const data = await response.json();
+
+      if (data.items && data.items.length > 0) {
+        const book = data.items[0].volumeInfo;
+        const publishDate = book.publishedDate ? new Date(book.publishedDate).toISOString().split('T')[0] : "";
+
+        setBookData({
+          title: book.title || "",
+          author: book.authors ? book.authors.join(", ") : "",
+          category: "",
+          description: book.description || "",
+          reading_time_minutes: 0,
+          total_copies: 1,
+          available_copies: 1,
+          publish_date: publishDate,
+        });
+      } else {
+        setScanningError("Book not found in Google Books database");
+      }
+    } catch (error) {
+      console.error("Error fetching book data:", error);
+      setScanningError("Failed to fetch book data from Google Books");
+    }
+  };
+
+  const startScanning = async () => {
+    setIsScanning(true);
+    setScanningError("");
+
+    try {
+      codeReader.current = new BrowserMultiFormatReader();
+      const result = await codeReader.current.decodeOnceFromVideoDevice(undefined, videoRef.current!);
+
+      if (result) {
+        const isbn = result.getText();
+        await fetchBookFromGoogleBooks(isbn);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        setScanningError("No barcode detected. Please try again.");
+      } else {
+        setScanningError("Error accessing camera or scanning barcode");
+        console.error("Scanning error:", error);
+      }
+    } finally {
+      stopScanning();
+    }
+  };
+
+  const stopScanning = () => {
+    setIsScanning(false);
+    if (codeReader.current) {
+      codeReader.current.reset();
+      codeReader.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (codeReader.current) {
+        codeReader.current.reset();
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +140,42 @@ export const AdminBookUpload = () => {
         <CardDescription>Upload a new book to the library system</CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Scan ISBN Barcode</h3>
+            <Button
+              type="button"
+              variant={isScanning ? "destructive" : "outline"}
+              onClick={isScanning ? stopScanning : startScanning}
+              className="flex items-center gap-2"
+            >
+              {isScanning ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+              {isScanning ? "Stop Scanning" : "Start Scanning"}
+            </Button>
+          </div>
+
+          {isScanning && (
+            <div className="mb-4">
+              <video
+                ref={videoRef}
+                className="w-full max-w-md mx-auto border rounded-lg"
+                autoPlay
+                muted
+                playsInline
+              />
+              <p className="text-sm text-muted-foreground text-center mt-2">
+                Point your camera at a book barcode to scan the ISBN
+              </p>
+            </div>
+          )}
+
+          {scanningError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{scanningError}</p>
+            </div>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
