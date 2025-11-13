@@ -120,9 +120,19 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
     
     try {
       const result = await apiClient.reserveBook(bookId, user.id);
+      
+      if (result.status === 'rejected' || result.status === 'error') {
+        Alert.alert(
+          '❌ Reservation Failed', 
+          result.message || 'Unable to reserve the book.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       Alert.alert(
         '✅ Reservation Successful', 
-        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
+        result.message || `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
         [{ text: 'OK' }]
       );
       
@@ -136,19 +146,10 @@ export const MyBooksScreen: React.FC<MyBooksScreenProps> = ({ user, navigation }
       await fetchData();
     } catch (error) {
       Alert.alert(
-        '✅ Reservation Successful', 
-        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
+        '❌ Reservation Failed', 
+        'Unable to reserve the book. Please try again.',
         [{ text: 'OK' }]
       );
-      
-      // Add notification even on error
-      showNotification(
-        'Reservation Sent',
-        `Your reservation for "${title}" has been sent. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
-      );
-      
-      await fetchData();
     }
   };
   

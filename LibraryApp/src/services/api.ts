@@ -158,7 +158,8 @@ export const apiClient = {
       const response = await fetch(`${API_BASE}/user/${userId}/reservations/all`);
       if (!response.ok) return [];
       const data = await response.json();
-      return data;
+      // Filter out checked_out reservations as they are now in borrowed books
+      return data.filter((res: any) => res.status !== 'checked_out');
     } catch (error) {
       console.log('Reservation history error:', error);
       return [];

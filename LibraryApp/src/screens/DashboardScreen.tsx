@@ -447,10 +447,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ user, navigati
       // Make the API call with proper error handling
       const result = await apiClient.reserveBook(bookId, user.id);
       
+      if (result.status === 'rejected' || result.status === 'error') {
+        Alert.alert(
+          '❌ Reservation Failed', 
+          result.message || `"${bookTitle}" could not be reserved.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       // Success feedback
       Alert.alert(
         '✅ Reservation Successful', 
-        `"${bookTitle}" has been reserved! You will be notified when it's ready for pickup.`,
+        result.message || `"${bookTitle}" has been reserved! You will be notified when it's ready for pickup.`,
         [{ text: 'OK' }]
       );
       

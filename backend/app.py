@@ -242,6 +242,24 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
+    # Book checkouts table (for approved reservations ready for pickup)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS book_checkouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reservation_id INTEGER NOT NULL,
+            book_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'pending_checkout' CHECK(status IN ('pending_checkout', 'completed', 'expired')),
+            checkout_deadline TIMESTAMP NOT NULL,
+            approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            viewed BOOLEAN DEFAULT 0,
+            FOREIGN KEY (reservation_id) REFERENCES book_reservations (id),
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
     # Account requests table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS account_requests (
@@ -254,6 +272,52 @@ def init_db():
             approved_at TIMESTAMP,
             approved_by INTEGER,
             FOREIGN KEY (approved_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # Notifications table for persistent user notifications
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            data TEXT,
+            is_read BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Chat conversations table (for organizing chats)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            book_id INTEGER,
+            conversation_type TEXT NOT NULL CHECK(conversation_type IN ('book', 'library')),
+            title TEXT,
+            last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (book_id) REFERENCES books (id)
+        )
+    ''')
+    
+    # Chat messages table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            message_text TEXT NOT NULL,
+            is_user_message BOOLEAN DEFAULT 1,
+            reply_to_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES chat_conversations (id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (reply_to_id) REFERENCES chat_messages (id)
         )
     ''')
     
@@ -679,7 +743,7 @@ def reserve_book(book_id):
         book_title, available_copies, total_copies = book
 
         # Check if user already has pending request for this book
-        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status IN ("pending", "approved_checkout")', (book_id, user_id))
+        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND (status = "pending" OR status = "approved_checkout")', (book_id, user_id))
         existing = cursor.fetchone()
 
         if existing:
@@ -689,26 +753,33 @@ def reserve_book(book_id):
         # Automated approval logic
         if available_copies > 0:
             # Auto-approve: create reservation and checkout record
-            cursor.execute('''
-                INSERT INTO book_reservations (book_id, user_id, status)
-                VALUES (?, ?, 'approved_checkout')
-            ''', (book_id, user_id))
+            conn.execute('BEGIN')
+            try:
+                cursor.execute('''
+                    INSERT INTO book_reservations (book_id, user_id, status)
+                    VALUES (?, ?, 'approved_checkout')
+                ''', (book_id, user_id))
 
-            reservation_id = cursor.lastrowid
+                reservation_id = cursor.lastrowid
 
-            # Calculate checkout deadline (2 days from now)
-            from datetime import datetime, timedelta
-            checkout_deadline = (datetime.now() + timedelta(days=2)).isoformat()
+                # Calculate checkout deadline (2 days from now)
+                from datetime import datetime, timedelta
+                checkout_deadline = (datetime.now() + timedelta(days=2)).isoformat()
 
-            # Create checkout record
-            cursor.execute('''
-                INSERT INTO book_checkouts (reservation_id, book_id, user_id, status, checkout_deadline, approved_at)
-                VALUES (?, ?, ?, 'pending_checkout', ?, ?)
-            ''', (reservation_id, book_id, user_id, checkout_deadline, datetime.now().isoformat()))
+                # Create checkout record
+                cursor.execute('''
+                    INSERT INTO book_checkouts (reservation_id, book_id, user_id, status, checkout_deadline, approved_at)
+                    VALUES (?, ?, ?, 'pending_checkout', ?, ?)
+                ''', (reservation_id, book_id, user_id, checkout_deadline, datetime.now().isoformat()))
 
-            # Update book availability
-            cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+                # Update book availability
+                cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
 
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise e
+            
             # Send notification to user
             send_push_to_user(user_id, 'Reservation Approved', f'Your reservation for "{book_title}" has been approved! Please collect it within 2 days.', {
                 'type': 'reservation_approved',
@@ -716,8 +787,7 @@ def reserve_book(book_id):
                 'book_title': book_title,
                 'checkout_deadline': checkout_deadline
             })
-
-            conn.commit()
+            
             conn.close()
 
             return jsonify({
@@ -903,6 +973,7 @@ def get_checkouts():
         FROM book_checkouts bc
         JOIN books b ON bc.book_id = b.id
         JOIN users u ON bc.user_id = u.id
+        WHERE bc.status = 'pending_checkout'
         ORDER BY bc.approved_at DESC
     ''')
     checkouts = cursor.fetchall()
@@ -947,8 +1018,15 @@ def complete_checkout(checkout_id):
             WHERE id = ?
         ''', (checkout_id,))
         
-        # Decrease available copies
-        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+        # Update reservation status to checked_out
+        cursor.execute('''
+            UPDATE book_reservations 
+            SET status = 'checked_out'
+            WHERE id = (SELECT reservation_id FROM book_checkouts WHERE id = ?)
+        ''', (checkout_id,))
+        
+        # Note: available_copies was already decreased when reservation was approved
+        # Do not decrease again
         
         # Create book issue record
         cursor.execute('''
