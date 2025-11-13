@@ -1675,9 +1675,21 @@ def get_user_history(user_id):
             
             # Check if book is overdue
             if issue['status'] == 'issued' and issue['due_date']:
-                due_date = datetime.strptime(issue['due_date'], '%Y-%m-%d').date()
-                if datetime.now().date() > due_date:
-                    issue['is_overdue'] = True
+                try:
+                    # Handle both date-only and datetime formats
+                    due_date_str = str(issue['due_date']).strip()
+                    if ' ' in due_date_str:
+                        # Has time component, parse as datetime then get date
+                        due_date = datetime.strptime(due_date_str, '%Y-%m-%d %H:%M:%S').date()
+                    else:
+                        # Date only format
+                        due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+                    
+                    if datetime.now().date() > due_date:
+                        issue['is_overdue'] = True
+                except (ValueError, TypeError) as e:
+                    print(f"Warning: Could not parse due_date '{issue['due_date']}' for issue {issue.get('id', 'unknown')}: {e}")
+                    # Don't set is_overdue if we can't parse the date
                     
             # Convert decimal to float for JSON serialization
             issue['fine_amount'] = float(issue['fine_amount']) if issue['fine_amount'] else 0.0
