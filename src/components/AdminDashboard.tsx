@@ -144,7 +144,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.bookRequests}</div>
             <p className="text-xs text-muted-foreground">
-              Pending reservation requests
+              Pending check out requests
             </p>
           </CardContent>
         </Card>

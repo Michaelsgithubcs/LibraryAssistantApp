@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, User, Calendar, Check, Clock } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 interface Checkout {
   id: number;
@@ -31,7 +32,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
 
   const fetchCheckouts = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/admin/checkouts');
+      const response = await fetch(`${API_BASE_URL}/admin/checkouts`);
       if (response.ok) {
         const data = await response.json();
         setCheckouts(data);
@@ -44,7 +45,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
 
   const handleCompleteCheckout = async (checkoutId: number) => {
     try {
-      const response = await fetch(`http://localhost:5001/api/admin/checkouts/${checkoutId}/complete`, {
+      const response = await fetch(`${API_BASE_URL}/admin/checkouts/${checkoutId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +98,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold text-foreground mb-2">Check Out</h2>
-          <p className="text-muted-foreground">Loading approved reservations...</p>
+          <p className="text-muted-foreground">Loading approved check outs...</p>
         </div>
       </div>
     );
@@ -107,7 +108,7 @@ export const BookRequests = ({ user }: BookRequestsProps) => {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold text-foreground mb-2">Check Out</h2>
-        <p className="text-muted-foreground">Manage approved book reservations waiting for pickup</p>
+          <p className="text-muted-foreground">Manage approved check outs waiting for pickup</p>
       </div>
 
       <div className="grid gap-4">

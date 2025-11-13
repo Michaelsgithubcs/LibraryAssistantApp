@@ -213,7 +213,7 @@ const Index = () => {
                 onClick={() => setCurrentView("requests")}
               >
                 <BookOpen className="h-4 w-4 mr-2" />
-                Book Requests
+                Check Outs
                 {requestCount > 0 && (
                   <div className="w-2 h-2 bg-green-500 rounded-full ml-2"></div>
                 )}
