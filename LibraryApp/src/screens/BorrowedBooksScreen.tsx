@@ -50,21 +50,41 @@ export const BorrowedBooksScreen: React.FC<BorrowedBooksScreenProps> = ({ user, 
   }, [user]);
 
   const fetchData = async () => {
+    console.log('=== BORROWED BOOKS SCREEN DEBUG ===');
+    console.log('BorrowedBooksScreen fetchData called with user:', JSON.stringify(user, null, 2));
+    console.log('User ID:', user?.id, 'User ID type:', typeof user?.id);
+    
     // Guard: Don't fetch if user is not loaded or invalid
     if (!user || !user.id) {
-      console.log('User not loaded yet, skipping data fetch');
+      console.log('❌ User not loaded yet, skipping data fetch. User object:', user);
       setLoading(false);
       return;
     }
 
+    console.log('✅ User validated, proceeding with API calls for user ID:', user.id);
+    console.log('Starting data fetch for user ID:', user.id);
     try {
+      console.log('🔄 Making API calls...');
       // Fetch all book data, including borrowed, returned and read books
       const [issuedAndReturnedBooks, reservationsData, readBooksHistory] = await Promise.all([
-        apiClient.getMyBooks(user.id),
+        apiClient.getMyBooks(user.id).then(result => {
+          console.log('✅ getMyBooks result:', Array.isArray(result) ? result.length : 'not array', 'items');
+          return result;
+        }).catch(error => {
+          console.error('❌ getMyBooks failed:', error);
+          return [];
+        }),
         Promise.resolve([]),
-        apiClient.getReadHistory(user.id)
+        apiClient.getReadHistory(user.id).then(result => {
+          console.log('✅ getReadHistory result:', Array.isArray(result) ? result.length : 'not array', 'items');
+          return result;
+        }).catch(error => {
+          console.error('❌ getReadHistory failed:', error);
+          return [];
+        })
       ]);
 
+      console.log('🔄 Making history API call...');
       // Get a complete history from the /users/:id/history endpoint
       const historyResponse = await apiClient.getAllUserHistory(user.id);
       const completeHistory = historyResponse.history || [];

@@ -249,25 +249,30 @@ export const apiClient = {
   async getAllUserHistory(userId: number): Promise<{success: boolean, history: HistoryItem[]}> {
     try {
       // Validate userId
+      console.log('getAllUserHistory called with userId:', userId, 'type:', typeof userId);
       if (!userId || typeof userId !== 'number' || userId <= 0) {
-        console.error('Invalid userId provided to getAllUserHistory:', userId);
+        console.error('Invalid userId provided to getAllUserHistory:', userId, 'type:', typeof userId);
         return { success: false, history: [] };
       }
 
-      console.log('Fetching complete history for user:', userId);
-      const response = await fetch(`${API_BASE}/users/${userId}/history`);
+      const apiUrl = `${API_BASE}/users/${userId}/history`;
+      console.log('Fetching complete history for user:', userId, 'API URL:', apiUrl);
+      const response = await fetch(apiUrl);
 
+      console.log('History API response status:', response.status, 'statusText:', response.statusText);
       if (!response.ok) {
         console.error('History API returned error status:', response.status, response.statusText);
-        throw new Error('Failed to fetch complete history');
+        const errorText = await response.text();
+        console.error('History API error response body:', errorText);
+        throw new Error(`Failed to fetch complete history: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log('Successfully fetched history for user:', userId, 'Items:', data.history?.length || 0);
+      console.log('Successfully fetched history for user:', userId, 'Response data:', data);
 
       return data;
     } catch (error) {
-      console.error('Error fetching complete history:', error);
+      console.error('Error fetching complete history:', error, 'Stack:', error instanceof Error ? error.stack : 'No stack');
       return { success: false, history: [] };
     }
   },
@@ -484,7 +489,8 @@ export async function askBookAssistant(book: AiBookContext, question: string): P
     return data.answer || 'No answer returned.';
   } catch (e: any) {
     // If API fails, provide a helpful fallback response
-    console.error('AI API error:', e);
+    // Note: AI errors are expected when service is unavailable - app has fallbacks
+    console.warn('AI API temporarily unavailable - using fallback response');
     
     // Provide contextual fallback based on the question
     const lowerQuestion = question.toLowerCase();
