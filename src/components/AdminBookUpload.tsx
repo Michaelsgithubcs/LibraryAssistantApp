@@ -15,7 +15,7 @@ export const AdminBookUpload = () => {
     author: "",
     category: "",
     description: "",
-    reading_time_minutes: 0,
+    reading_time_minutes: 400,
     total_copies: 1,
     available_copies: 1,
     publish_date: "",
@@ -57,7 +57,7 @@ export const AdminBookUpload = () => {
         const book = data.items[0].volumeInfo;
         const publishDate = book.publishedDate ? new Date(book.publishedDate).toISOString().split('T')[0] : "";
 
-        const readingTime = book.pageCount ? Math.round(book.pageCount / 40) : 0; // Rough estimate: 40 pages per hour
+        const readingTime = 400; // Always use 400 minutes for reading time
 
         setBookData({
           title: book.title || "",
