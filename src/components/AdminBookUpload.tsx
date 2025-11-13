@@ -83,6 +83,12 @@ export const AdminBookUpload = () => {
     setScanningError("");
 
     try {
+      // Get user media stream
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      videoRef.current!.srcObject = stream;
+
       codeReader.current = new BrowserMultiFormatReader();
       const result = await codeReader.current.decodeOnceFromVideoDevice(undefined, videoRef.current!);
 
@@ -104,6 +110,11 @@ export const AdminBookUpload = () => {
 
   const stopScanning = () => {
     setIsScanning(false);
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
     if (codeReader.current) {
       codeReader.current.reset();
       codeReader.current = null;
@@ -178,13 +189,19 @@ export const AdminBookUpload = () => {
 
           {isScanning && (
             <div className="mb-4">
-              <video
-                ref={videoRef}
-                className="w-full max-w-md mx-auto border rounded-lg"
-                autoPlay
-                muted
-                playsInline
-              />
+              <div className="relative bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-300 shadow-lg">
+                <video
+                  ref={videoRef}
+                  className="w-full h-64 object-cover"
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
+                />
+                <div className="absolute inset-0 border-2 border-dashed border-red-500 rounded-lg pointer-events-none">
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 border-2 border-red-400 rounded-lg"></div>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground text-center mt-2">
                 Point your camera at a book barcode to scan the ISBN
               </p>
