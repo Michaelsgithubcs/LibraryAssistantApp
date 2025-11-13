@@ -203,15 +203,38 @@ def init_db():
             FOREIGN KEY (approved_by) REFERENCES users (id)
         )
     ''')
+
+    # Book checkouts table for approved books waiting to be collected
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS book_checkouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reservation_id INTEGER,
+            book_id INTEGER,
+            user_id INTEGER,
+            status TEXT DEFAULT 'pending_checkout',
+            checkout_deadline TIMESTAMP,
+            checked_out_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (reservation_id) REFERENCES book_reservations (id),
+            FOREIGN KEY (book_id) REFERENCES books (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
     
     # Add rejection_reason and viewed columns if they don't exist
     try:
         cursor.execute('ALTER TABLE book_reservations ADD COLUMN rejection_reason TEXT')
     except sqlite3.OperationalError:
         pass
-    
+
     try:
         cursor.execute('ALTER TABLE book_reservations ADD COLUMN viewed BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
+
+    # Add viewed column to book_checkouts if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE book_checkouts ADD COLUMN viewed BOOLEAN DEFAULT 0')
     except sqlite3.OperationalError:
         pass
     
@@ -632,36 +655,76 @@ def reserve_book(book_id):
     try:
         data = request.json
         user_id = data.get('user_id', 1)
-        
+
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
-        
-        # Check if book exists
-        cursor.execute('SELECT title FROM books WHERE id = ?', (book_id,))
+
+        # Check if book exists and get availability
+        cursor.execute('SELECT title, available_copies FROM books WHERE id = ?', (book_id,))
         book = cursor.fetchone()
-        
+
         if not book:
             conn.close()
             return jsonify({'error': 'Book not found'}), 404
-        
+
+        book_title, available_copies = book
+
         # Check if user already has pending request for this book
-        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status = "pending"', (book_id, user_id))
+        cursor.execute('SELECT id FROM book_reservations WHERE book_id = ? AND user_id = ? AND status IN ("pending", "approved_checkout")', (book_id, user_id))
         existing = cursor.fetchone()
-        
+
         if existing:
             conn.close()
-            return jsonify({'error': 'You already have a pending request for this book'}), 400
-        
-        # Create reservation request
+            return jsonify({'error': 'You already have a pending request or approved checkout for this book'}), 400
+
+        # Check availability
+        if available_copies <= 0:
+            # Auto-reject due to no available copies
+            cursor.execute('''
+                INSERT INTO book_reservations (book_id, user_id, status, rejection_reason)
+                VALUES (?, ?, 'rejected', 'unavailable book copies')
+            ''', (book_id, user_id))
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({'message': 'Reservation rejected: No available copies', 'status': 'rejected', 'reason': 'unavailable book copies'})
+
+        # Auto-approve and create checkout entry
+        local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
+        checkout_deadline = (datetime.now() + timedelta(days=2)).isoformat()
+
         cursor.execute('''
-            INSERT INTO book_reservations (book_id, user_id, status)
-            VALUES (?, ?, 'pending')
-        ''', (book_id, user_id))
-        
+            INSERT INTO book_reservations (book_id, user_id, status, approved_at, approved_by)
+            VALUES (?, ?, 'approved_checkout', ?, 0)
+        ''', (book_id, user_id, local_timestamp))
+
+        # Get the reservation ID for the checkout entry
+        reservation_id = cursor.lastrowid
+
+        # Create checkout entry
+        cursor.execute('''
+            INSERT INTO book_checkouts (reservation_id, book_id, user_id, status, checkout_deadline, created_at)
+            VALUES (?, ?, ?, 'pending_checkout', ?, ?)
+        ''', (reservation_id, book_id, user_id, checkout_deadline, local_timestamp))
+
+        # Create notification for user
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, title, message, data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            'reservation_approved',
+            'Reservation Approved',
+            f'Your reservation for "{book_title}" has been approved. Please collect it within 2 days.',
+            f'{{"reservationId": {reservation_id}, "bookTitle": "{book_title}", "bookId": {book_id}, "timestamp": "{local_timestamp}"}}',
+            local_timestamp
+        ))
+
         conn.commit()
         conn.close()
-        
-        return jsonify({'message': 'Reservation request sent to admin for approval'})
+
+        return jsonify({'message': 'Reservation approved automatically. Please collect your book within 2 days.', 'status': 'approved_checkout'})
     except Exception as e:
         print(f'Reserve error: {e}')
         return jsonify({'error': str(e)}), 500
@@ -1590,37 +1653,185 @@ def get_user_reservation_status(user_id):
     conn.close()
     return jsonify(status_list)
 
-@app.route('/api/admin/reservation-requests', methods=['GET'])
-def get_reservation_requests():
+@app.route('/api/admin/checkouts', methods=['GET'])
+def get_checkouts():
+    # Process any expired checkouts before returning the list
+    process_expired_checkouts()
+    
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-        SELECT br.id, b.title, b.author, u.username, u.email, br.requested_at, b.available_copies, br.book_id, br.user_id
-        FROM book_reservations br
-        JOIN books b ON br.book_id = b.id
-        JOIN users u ON br.user_id = u.id
-        WHERE br.status = 'pending'
-        ORDER BY br.requested_at ASC
+        SELECT bc.id, b.title, b.author, u.username, u.email, bc.created_at, bc.checkout_deadline, bc.book_id, bc.user_id, br.id as reservation_id
+        FROM book_checkouts bc
+        JOIN books b ON bc.book_id = b.id
+        JOIN users u ON bc.user_id = u.id
+        JOIN book_reservations br ON bc.reservation_id = br.id
+        WHERE bc.status = 'pending_checkout'
+        ORDER BY bc.created_at ASC
     ''')
-    requests = cursor.fetchall()
-    
-    request_list = []
-    for req in requests:
-        request_list.append({
-            'id': req[0],
-            'book_title': req[1],
-            'book_author': req[2],
-            'user_name': req[3],
-            'user_email': req[4],
-            'requested_at': req[5],
-            'available_copies': req[6],
-            'book_id': req[7],
-            'user_id': req[8]
+    checkouts = cursor.fetchall()
+
+    checkout_list = []
+    for checkout in checkouts:
+        checkout_list.append({
+            'id': checkout[0],
+            'book_title': checkout[1],
+            'book_author': checkout[2],
+            'user_name': checkout[3],
+            'user_email': checkout[4],
+            'approved_at': checkout[5],
+            'checkout_deadline': checkout[6],
+            'book_id': checkout[7],
+            'user_id': checkout[8],
+            'reservation_id': checkout[9]
         })
-    
+
     conn.close()
-    return jsonify(request_list)
+    return jsonify(checkout_list)
+
+@app.route('/api/admin/checkouts/<int:checkout_id>/complete', methods=['POST'])
+def complete_checkout(checkout_id):
+    data = request.json
+    admin_id = data.get('admin_id', 1)
+
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    try:
+        # Get checkout details
+        cursor.execute('''
+            SELECT bc.reservation_id, bc.book_id, bc.user_id, b.title
+            FROM book_checkouts bc
+            JOIN books b ON bc.book_id = b.id
+            WHERE bc.id = ? AND bc.status = 'pending_checkout'
+        ''', (checkout_id,))
+        checkout = cursor.fetchone()
+
+        if not checkout:
+            return jsonify({'error': 'Checkout not found or already completed'}), 404
+
+        reservation_id, book_id, user_id, book_title = checkout
+
+        # Issue the book (14 days from now)
+        issue_date = datetime.now().date()
+        due_date = issue_date + timedelta(days=14)
+
+        cursor.execute('''
+            INSERT INTO book_issues (book_id, user_id, issue_date, due_date, status, overdue_fee_per_day)
+            VALUES (?, ?, ?, ?, 'issued', 5.00)
+        ''', (book_id, user_id, issue_date, due_date))
+
+        # Update available copies
+        cursor.execute('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?', (book_id,))
+
+        # Update checkout status
+        local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
+        cursor.execute('''
+            UPDATE book_checkouts
+            SET status = 'completed', checked_out_at = ?, viewed = 0
+            WHERE id = ?
+        ''', (local_timestamp, checkout_id))
+
+        # Update reservation status
+        cursor.execute('''
+            UPDATE book_reservations
+            SET status = 'issued', approved_at = ?, approved_by = ?
+            WHERE id = ?
+        ''', (local_timestamp, admin_id, reservation_id))
+
+        # Create notification for user
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, title, message, data, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            'book_issued',
+            'Book Issued',
+            f'"{book_title}" has been issued to you. Due date: {due_date.strftime("%Y-%m-%d")}',
+            f'{{"bookId": {book_id}, "bookTitle": "{book_title}", "dueDate": "{due_date.strftime("%Y-%m-%d")}", "timestamp": "{local_timestamp}"}}',
+            local_timestamp
+        ))
+
+        conn.commit()
+        return jsonify({'message': 'Book checkout completed successfully'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/admin/checkouts/count', methods=['GET'])
+def get_checkouts_count():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT COUNT(*) FROM book_checkouts WHERE status = "pending_checkout"')
+    count = cursor.fetchone()[0]
+
+    conn.close()
+    return jsonify({'count': count})
+
+def process_expired_checkouts():
+    """Process checkouts that have expired (2 days old) and return books to available"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+
+        # Find expired checkouts
+        current_time = datetime.now().isoformat()
+        cursor.execute('''
+            SELECT bc.id, bc.reservation_id, bc.book_id, bc.user_id, b.title
+            FROM book_checkouts bc
+            JOIN books b ON bc.book_id = b.id
+            WHERE bc.status = 'pending_checkout'
+            AND bc.checkout_deadline < ?
+        ''', (current_time,))
+
+        expired_checkouts = cursor.fetchall()
+
+        for checkout in expired_checkouts:
+            checkout_id, reservation_id, book_id, user_id, book_title = checkout
+
+            # Update checkout status to expired
+            cursor.execute('''
+                UPDATE book_checkouts
+                SET status = 'expired', viewed = 0
+                WHERE id = ?
+            ''', (checkout_id,))
+
+            # Update reservation status to expired
+            cursor.execute('''
+                UPDATE book_reservations
+                SET status = 'expired', rejection_reason = 'checkout deadline expired'
+                WHERE id = ?
+            ''', (reservation_id,))
+
+            # Create notification for user
+            local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, title, message, data, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                'checkout_expired',
+                'Checkout Expired',
+                f'Your checkout deadline for "{book_title}" has expired. The book is now available for others.',
+                f'{{"bookId": {book_id}, "bookTitle": "{book_title}", "timestamp": "{local_timestamp}"}}',
+                local_timestamp
+            ))
+
+        if expired_checkouts:
+            print(f'Processed {len(expired_checkouts)} expired checkouts')
+
+        conn.commit()
+        conn.close()
+
+    except Exception as e:
+        print(f'Error processing expired checkouts: {e}')
+
+# Call this function periodically (you could set up a cron job or scheduler)
+# For now, we'll call it when the app starts and on certain endpoints
 
 @app.route('/api/admin/reservation-requests/<int:request_id>/approve', methods=['POST'])
 def approve_reservation(request_id):

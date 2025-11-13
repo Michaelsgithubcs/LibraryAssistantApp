@@ -192,10 +192,16 @@ export const BookSearch = ({ user }: BookSearchProps) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id })
       });
-      
+
       if (response.ok) {
         const result = await response.json();
-        alert(result.message || 'Reservation request sent!');
+        if (result.status === 'approved_checkout') {
+          alert('Reservation approved! Please collect your book within 2 days.');
+        } else if (result.status === 'rejected') {
+          alert(`Reservation rejected: ${result.reason || 'Unknown reason'}`);
+        } else {
+          alert(result.message || 'Reservation processed!');
+        }
         fetchBooks();
       } else {
         const error = await response.json();

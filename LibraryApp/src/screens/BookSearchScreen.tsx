@@ -58,33 +58,48 @@ export const BookSearchScreen: React.FC<BookSearchScreenProps> = ({ user, naviga
   const handleReserve = async (bookId: string, title: string) => {
     try {
       const result = await apiClient.reserveBook(bookId, user.id);
-      Alert.alert(
-        '✅ Reservation Successful', 
-        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
-        [{ text: 'OK' }]
-      );
       
-      // Add notification
-      showNotification(
-        'Reservation Sent',
-        `Your reservation for "${title}" has been sent. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
-      );
+      if (result.status === 'approved_checkout') {
+        Alert.alert(
+          '✅ Reservation Approved!', 
+          `"${title}" is now ready for pickup! Please collect it within 2 days.`,
+          [{ text: 'OK' }]
+        );
+        
+        // Add notification
+        showNotification(
+          'Reservation Approved',
+          `"${title}" is ready for pickup. Please collect it within 2 days.`,
+          { type: 'reservation', bookId, bookTitle: title, userId: user.id }
+        );
+      } else if (result.status === 'rejected') {
+        Alert.alert(
+          '❌ Reservation Rejected', 
+          `Sorry, "${title}" is not available. ${result.reason || 'Please try another book.'}`,
+          [{ text: 'OK' }]
+        );
+        
+        // Add notification
+        showNotification(
+          'Reservation Rejected',
+          `"${title}" is not available. ${result.reason || 'Please try another book.'}`,
+          { type: 'reservation', bookId, bookTitle: title, userId: user.id }
+        );
+      } else {
+        Alert.alert(
+          'Reservation Processed', 
+          result.message || 'Your reservation request has been processed.',
+          [{ text: 'OK' }]
+        );
+      }
       
       fetchBooks();
     } catch (error) {
       console.error('Error reserving book:', error);
       Alert.alert(
-        '✅ Reservation Successful', 
-        `"${title}" has been reserved! You will be notified when it's ready for pickup.`,
+        'Error', 
+        'Failed to process reservation. Please try again.',
         [{ text: 'OK' }]
-      );
-      
-      // Add notification even on error (since the error handler still marks it successful)
-      showNotification(
-        'Reservation Sent',
-        `Your reservation for "${title}" has been sent. You'll be notified when it's ready for pickup.`,
-        { type: 'reservation', bookId, bookTitle: title, userId: user.id }
       );
     }
   };

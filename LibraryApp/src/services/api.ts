@@ -165,7 +165,7 @@ export const apiClient = {
     }
   },
 
-  async reserveBook(bookId: string, userId: number): Promise<{ message: string }> {
+  async reserveBook(bookId: string, userId: number): Promise<{ status: string; message?: string; reason?: string }> {
     try {
       console.log(`API Request: Reserving book ${bookId} for user ${userId}`);
       
@@ -181,16 +181,15 @@ export const apiClient = {
       const result = await response.json();
       console.log('Reserve response data:', result);
       
-      // Even if the server returns an error, we treat it as success for better UX
       if (!response.ok) {
-        console.log(`Non-OK response but treating as success: ${response.status}`);
-        return { message: result.message || 'Reservation request submitted successfully!' };
+        console.log(`Non-OK response: ${response.status}`);
+        return { status: 'error', message: result.error || 'Failed to reserve book' };
       }
       
       return result;
     } catch (error) {
       console.log('Reserve error:', error);
-      return { message: 'Reservation request submitted successfully!' };
+      return { status: 'error', message: 'Failed to reserve book' };
     }
   },
 

@@ -35,7 +35,7 @@ const Index = () => {
   const fetchRequestCount = async () => {
     if (currentUser?.role === 'admin') {
       try {
-        const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/reservation-requests/count');
+        const response = await fetch('https://libraryassistantapp.onrender.com/api/admin/checkouts/count');
         if (response.ok) {
           const data = await response.json();
           setRequestCount(data.count);

@@ -12,6 +12,8 @@ except Exception:
 import hashlib
 import secrets
 import google.generativeai as genai
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 # Lazy import recommendation services
 from recommendation_service import RecommendationService
 from ml_recommendation_service import MLRecommendationService
@@ -33,6 +35,21 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
+
+# Initialize background scheduler for automated tasks
+scheduler = BackgroundScheduler()
+scheduler.start()
+
+# Schedule expired checkout processing every hour
+scheduler.add_job(
+    func=process_expired_checkouts,
+    trigger=IntervalTrigger(hours=1),
+    id='process_expired_checkouts',
+    name='Process expired checkouts every hour',
+    replace_existing=True
+)
+
+print("[Startup] Background scheduler initialized with expired checkout processing")
 
 # Database path: allow overriding via env var so we can attach a Persistent Disk on Render
 DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
@@ -3221,6 +3238,69 @@ For recommendations, consider the user's reading history when available.
                 'has_recommendations': False,
                 'recommendations': []
             })
+
+def process_expired_checkouts():
+    """Process checkouts that have expired (2 days old) and return books to available"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+
+        # Find expired checkouts
+        current_time = datetime.now().isoformat()
+        cursor.execute('''
+            SELECT bc.id, bc.reservation_id, bc.book_id, bc.user_id, b.title
+            FROM book_checkouts bc
+            JOIN books b ON bc.book_id = b.id
+            WHERE bc.status = 'pending_checkout'
+            AND bc.checkout_deadline < ?
+        ''', (current_time,))
+
+        expired_checkouts = cursor.fetchall()
+
+        for checkout in expired_checkouts:
+            checkout_id, reservation_id, book_id, user_id, book_title = checkout
+
+            # Update checkout status to expired
+            cursor.execute('''
+                UPDATE book_checkouts
+                SET status = 'expired', viewed = 0
+                WHERE id = ?
+            ''', (checkout_id,))
+
+            # Update reservation status to expired
+            cursor.execute('''
+                UPDATE book_reservations
+                SET status = 'expired', rejection_reason = 'checkout deadline expired'
+                WHERE id = ?
+            ''', (reservation_id,))
+
+            # Create notification for user
+            local_timestamp = (datetime.now(TZ_JHB).isoformat() if TZ_JHB else datetime.now().isoformat())
+            cursor.execute('''
+                INSERT INTO notifications (user_id, type, title, message, data, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                'checkout_expired',
+                'Checkout Expired',
+                f'Your checkout deadline for "{book_title}" has expired. The book is now available for others.',
+                f'{{"bookId": {book_id}, "bookTitle": "{book_title}", "timestamp": "{local_timestamp}"}}',
+                local_timestamp
+            ))
+
+        if expired_checkouts:
+            print(f'Processed {len(expired_checkouts)} expired checkouts')
+
+        conn.commit()
+        conn.close()
+
+    except Exception as e:
+        print(f'Error processing expired checkouts: {e}')
+
+import atexit
+
+# Ensure scheduler shuts down properly on app exit
+atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
     # Bind to Render's provided PORT when deployed; fall back to local dev defaults
