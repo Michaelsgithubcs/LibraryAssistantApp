@@ -48,7 +48,7 @@ export const AdminDashboard = ({ onNavigate, user }: AdminDashboardProps) => {
       const finesResponse = await fetch(`${API_BASE_URL}/admin/fines-count`);
   const finesData = finesResponse.ok ? await finesResponse.json() : { amount: 0, damage_total: 0, overdue_total: 0 };
       
-      const requestsResponse = await fetch(`${API_BASE_URL}/admin/checkouts/count`);
+      const requestsResponse = await fetch(`${API_BASE_URL}/admin/issued-books/count`);
       const requestsData = requestsResponse.ok ? await requestsResponse.json() : { count: 0 };
       
       const activeMembers = members.filter(m => m.status === 'active').length;

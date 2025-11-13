@@ -1442,6 +1442,17 @@ def get_issued_books():
     conn.close()
     return jsonify(issue_list)
 
+@app.route('/api/admin/issued-books/count', methods=['GET'])
+def get_issued_books_count():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM book_checkouts WHERE status = "pending_checkout"')
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return jsonify({'count': count})
+
 @app.route('/api/admin/issues/<int:issue_id>/return', methods=['POST'])
 def return_book(issue_id):
     conn = sqlite3.connect(DATABASE)
