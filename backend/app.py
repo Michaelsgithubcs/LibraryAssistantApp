@@ -12,8 +12,16 @@ except Exception:
 import hashlib
 import secrets
 import google.generativeai as genai
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
+    APSCHEDULER_AVAILABLE = True
+    print("[Startup] APScheduler initialized successfully")
+except ImportError:
+    BackgroundScheduler = None
+    IntervalTrigger = None
+    APSCHEDULER_AVAILABLE = False
+    print("[Startup] APScheduler not available - automated tasks disabled")
 # Lazy import recommendation services
 from recommendation_service import RecommendationService
 from ml_recommendation_service import MLRecommendationService
@@ -36,20 +44,24 @@ app = Flask(__name__)
 CORS(app)
 app.secret_key = secrets.token_hex(16)
 
-# Initialize background scheduler for automated tasks
-scheduler = BackgroundScheduler()
-scheduler.start()
+# Initialize background scheduler for automated tasks (if available)
+if APSCHEDULER_AVAILABLE:
+    scheduler = BackgroundScheduler()
+    scheduler.start()
 
-# Schedule expired checkout processing every hour
-scheduler.add_job(
-    func=process_expired_checkouts,
-    trigger=IntervalTrigger(hours=1),
-    id='process_expired_checkouts',
-    name='Process expired checkouts every hour',
-    replace_existing=True
-)
+    # Schedule expired checkout processing every hour
+    scheduler.add_job(
+        func=process_expired_checkouts,
+        trigger=IntervalTrigger(hours=1),
+        id='process_expired_checkouts',
+        name='Process expired checkouts every hour',
+        replace_existing=True
+    )
 
-print("[Startup] Background scheduler initialized with expired checkout processing")
+    print("[Startup] Background scheduler initialized with expired checkout processing")
+else:
+    scheduler = None
+    print("[Startup] Background scheduler not available - manual processing only")
 
 # Database path: allow overriding via env var so we can attach a Persistent Disk on Render
 DATABASE = os.environ.get('DATABASE_PATH', 'library.db')
@@ -3299,8 +3311,9 @@ def process_expired_checkouts():
 
 import atexit
 
-# Ensure scheduler shuts down properly on app exit
-atexit.register(lambda: scheduler.shutdown())
+# Ensure scheduler shuts down properly on app exit (if available)
+if APSCHEDULER_AVAILABLE and scheduler:
+    atexit.register(lambda: scheduler.shutdown())
 
 if __name__ == '__main__':
     # Bind to Render's provided PORT when deployed; fall back to local dev defaults
