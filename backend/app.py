@@ -3435,72 +3435,98 @@ For recommendations, consider the user's reading history when available.
         user_prompt = f"User Question: {question}"
 
         print("Sending request to Gemini API for library assistant...")
+        import requests as req
 
-        # Use Gemini API
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        # Try multiple models in order of preference (updated for available models)
+        models_to_try = [
+            'gemini-2.5-flash',      # Latest stable model
+            'gemini-2.0-flash',      # Previous stable version
+            'gemini-pro-latest',     # Latest pro model
+            'gemini-flash-latest'    # Latest flash model
+        ]
 
-        full_prompt = f"{enhanced_context}\n\n{user_prompt}"
+        last_error = None
+        for model in models_to_try:
+            try:
+                print(f"Trying model: {model}")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
-        payload = {
-            "contents": [{
-                "parts": [{"text": full_prompt}]
-            }],
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 1000,
-                "topP": 0.8,
-                "topK": 40
-            }
-        }
+                full_prompt = f"{enhanced_context}\n\n{user_prompt}"
+                payload = {
+                    "contents": [{
+                        "parts": [{"text": full_prompt}]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "maxOutputTokens": 1000,
+                        "topP": 0.8,
+                        "topK": 40
+                    }
+                }
 
-        response = requests.post(url, json=payload, timeout=15)
-        response.raise_for_status()
+                response = req.post(url, json=payload, timeout=30)
+                response.raise_for_status()
+                result = response.json()
 
-        result = response.json()
-        if 'candidates' in result and result['candidates']:
-            ai_response = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                if 'candidates' in result and result['candidates']:
+                    ai_response = result['candidates'][0]['content']['parts'][0]['text'].strip()
+                    print(f"Success with model: {model}")
+                    print(f"Response text length: {len(ai_response) if ai_response else 0} characters")
 
-            # Post-process response to add interactive elements
-            enhanced_response = ai_response
+                    if not ai_response or len(ai_response.strip()) == 0:
+                        print("Error: Empty response from Gemini API")
+                        continue  # Try next model
 
-            # Add book search results if available
-            if book_search_results:
-                enhanced_response += f"\n\n📚 I found these books that match your search:\n"
-                for i, book in enumerate(book_search_results[:3], 1):
-                    enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
-                    enhanced_response += f"   Category: {book['category']}\n"
-                    enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
-                
-                if len(book_search_results) > 3:
-                    enhanced_response += f"\n   ... and {len(book_search_results) - 3} more results"
-                
-                enhanced_response += "\n\n💡 You can ask me to reserve any of these books!"
+                    # Post-process response to add interactive elements
+                    enhanced_response = ai_response
 
-            # Add book comparison results if available
-            if comparison_results and len(comparison_results) >= 2:
-                enhanced_response += f"\n\n⚖️ Book Comparison ({len(comparison_results)} books):\n"
-                for i, book in enumerate(comparison_results, 1):
-                    enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
-                    enhanced_response += f"   Category: {book['category']}\n"
-                    enhanced_response += f"   Published: {book['publish_date'] or 'Unknown'}\n"
-                    enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
-                
-                enhanced_response += "\n💡 I can help you compare these books in terms of themes, writing style, or popularity!"
+                    # Add book search results if available
+                    if book_search_results:
+                        enhanced_response += f"\n\n📚 I found these books that match your search:\n"
+                        for i, book in enumerate(book_search_results[:3], 1):
+                            enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
+                            enhanced_response += f"   Category: {book['category']}\n"
+                            enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
+                        
+                        if len(book_search_results) > 3:
+                            enhanced_response += f"\n   ... and {len(book_search_results) - 3} more results"
+                        
+                        enhanced_response += "\n\n💡 You can ask me to reserve any of these books!"
 
-            # Add book search suggestions if relevant
-            elif any(keyword in question.lower() for keyword in ['find', 'search', 'looking for', 'recommend']):
-                enhanced_response += "\n\n💡 Tip: You can also use the Book Search feature in the app to browse available books!"
+                    # Add book comparison results if available
+                    if comparison_results and len(comparison_results) >= 2:
+                        enhanced_response += f"\n\n⚖️ Book Comparison ({len(comparison_results)} books):\n"
+                        for i, book in enumerate(comparison_results, 1):
+                            enhanced_response += f"\n{i}. **{book['title']}** by {book['author']}\n"
+                            enhanced_response += f"   Category: {book['category']}\n"
+                            enhanced_response += f"   Published: {book['publish_date'] or 'Unknown'}\n"
+                            enhanced_response += f"   Available: {book['available_copies']} of {book['total_copies']} copies\n"
+                        
+                        enhanced_response += "\n💡 I can help you compare these books in terms of themes, writing style, or popularity!"
 
-            return jsonify({
-                'answer': enhanced_response,
-                'has_recommendations': len(ml_recommendations) > 0,
-                'recommendations': ml_recommendations[:3] if ml_recommendations else [],
-                'search_results': book_search_results[:5] if book_search_results else [],
-                'comparison_results': comparison_results[:3] if comparison_results else []
-            })
+                    # Add book search suggestions if relevant
+                    elif any(keyword in question.lower() for keyword in ['find', 'search', 'looking for', 'recommend']):
+                        enhanced_response += "\n\n💡 Tip: You can also use the Book Search feature in the app to browse available books!"
 
-        else:
-            return jsonify({'error': 'No response generated from AI'}), 500
+                    return jsonify({
+                        'answer': enhanced_response,
+                        'has_recommendations': len(ml_recommendations) > 0,
+                        'recommendations': ml_recommendations[:3] if ml_recommendations else [],
+                        'search_results': book_search_results[:5] if book_search_results else [],
+                        'comparison_results': comparison_results[:3] if comparison_results else []
+                    })
+
+                else:
+                    print(f"No candidates in response for model {model}")
+                    continue  # Try next model
+
+            except Exception as model_error:
+                print(f"Model {model} failed: {str(model_error)}")
+                last_error = model_error
+                continue  # Try next model
+
+        # If all models failed, raise the last error
+        raise last_error
 
     except Exception as e:
         print(f"Error in library assistant AI: {str(e)}")
