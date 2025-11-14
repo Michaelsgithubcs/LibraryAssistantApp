@@ -2742,11 +2742,12 @@ def ai_book_assistant_v2():
             print("Sending request to Gemini API...")
             import requests as req
 
-            # Try multiple models in order of preference
+            # Try multiple models in order of preference (updated for available models)
             models_to_try = [
-                'gemini-1.5-flash',
-                'gemini-1.5-pro',
-                'gemini-pro'
+                'gemini-2.5-flash',      # Latest stable model
+                'gemini-2.0-flash',      # Previous stable version
+                'gemini-pro-latest',     # Latest pro model
+                'gemini-flash-latest'    # Latest flash model
             ]
 
             last_error = None
